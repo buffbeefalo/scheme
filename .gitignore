@@ -1,0 +1,9 @@
+# Scheme ships code, tests and docs only. Runtime state lives under ~/.claude/command-deck/ and in
+# tmux, never in this tree.
+node_modules/
+*.log
+*.jsonl
+.env
+.env.*
+.cc-uploads/
+.DS_Store

@@ -1,0 +1,35 @@
+# Extend the default rules. Every exception requires BOTH the exact file and exact known value.
+# The existing xterm bundle is also hash-pinned by npm run check:release.
+# Never exempt an entire test or vendor file from secret scanning.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "Exact synthetic redaction-test value"
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(?:^|/)test/redact\.test\.js$''']
+regexes = ['''^sk\-proj\-abcDEF1234567890XYZ$''']
+
+[[rules.allowlists]]
+description = "Known minified xterm false positive; reviewed bundle hash is pinned"
+condition = "AND"
+regexTarget = "secret"
+paths = ['''(?:^|/)public/vendor/xterm\.js$''']
+regexes = ['''^t\.TwoKeyMap=void$''']
+
+[[rules]]
+id = "gitlab-pat"
+
+[[rules.allowlists]]
+description = "Exact complete source lines containing synthetic GitLab redaction values"
+condition = "AND"
+regexTarget = "line"
+paths = ['''(?:^|/)test/redact\.test\.js$''']
+regexes = [
+  '''^\n?\ \ \ \ '[g]lpat\-abcdefghijklmnopqrstuvwxyz',$''',
+  '''^\n?\ \ assert\.doesNotMatch\(redacted,\ /not\-real\-key\-material\|user:pass\|[g]lpat\-abcdefghijklmnopqrstuvwxyz\|[g]hp_abcdefghijklmnopqrstuvwxyz/\);$''',
+]

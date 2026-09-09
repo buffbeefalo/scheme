@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# claude-local — run Claude Code against a model served by Ollama on this machine.
+#
+# Claude Code talks the Anthropic Messages API; Ollama (0.31+) serves that same API natively at
+# /v1/messages, so no proxy is needed: point Claude Code at Ollama and name the model. This is the
+# "Local LLM" lane in Scheme. It is FAIL-LOUD by design: if local inference is not healthy it exits
+# non-zero instead of silently falling through to a cloud model and a bill.
+#
+#   CLAUDE_LOCAL_MODEL   ollama tag to run            (default qwen3-coder:30b — see `ollama list`)
+#   CLAUDE_LOCAL_BASE    ollama base URL              (default http://localhost:11434)
+#   CLAUDE_LOCAL_BIN     a pinned Claude Code binary  (default: `claude` on PATH — pinning is optional
+#                        but recommended: the auto-updating binary can change the prompt/tool format
+#                        a local model sees between sessions)
+#   CLAUDE_LOCAL_CONFIG  config dir for local sessions (default ~/.claude-local — keeps your cloud
+#                        CLAUDE.md, hooks and plugins away from the local model)
+#
+# Check the model's memory and context requirements before pulling it; quality varies by model.
+set -euo pipefail
+
+MODEL="${CLAUDE_LOCAL_MODEL:-qwen3-coder:30b}"
+BASE="${CLAUDE_LOCAL_BASE:-http://localhost:11434}"
+CONFIG_DIR="${CLAUDE_LOCAL_CONFIG:-$HOME/.claude-local}"
+
+# Honor --model <tag> / --model=<tag> so the preflight checks the brain that will actually run.
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case "${args[$i]}" in
+    --model)   (( i + 1 < ${#args[@]} )) && MODEL="${args[$((i + 1))]}" ;;
+    --model=*) MODEL="${args[$i]#--model=}" ;;
+  esac
+done
+
+# Preflight 1: Ollama reachable?
+if ! curl -sf --max-time 3 "$BASE/api/version" >/dev/null; then
+  echo "claude-local: Ollama not reachable at $BASE — refusing to start (no cloud fallback). Is 'ollama serve' running?" >&2
+  exit 1
+fi
+# Preflight 2: the model exists locally? (the reply also tells us its real context window)
+if ! SHOW_JSON=$(curl -sf --max-time 5 "$BASE/api/show" -d "{\"model\":\"$MODEL\"}"); then
+  echo "claude-local: model '$MODEL' is not pulled — run: ollama pull $MODEL   (or pick another: ollama list)" >&2
+  exit 1
+fi
+# Real context window → Claude Code's context meter and auto-compaction use the TRUE size instead
+# of a believed 200k. Without this, long local sessions silently truncate.
+REAL_CTX=$(printf '%s' "$SHOW_JSON" | grep -oE '"?num_ctx"?[^0-9]*[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+case "${REAL_CTX:-}" in (''|*[!0-9]*) REAL_CTX=32768 ;; esac
+[ "$REAL_CTX" -ge 4096 ] && [ "$REAL_CTX" -le 1048576 ] || REAL_CTX=32768
+if [ -n "${CLAUDE_CODE_MAX_CONTEXT_TOKENS:-}" ]; then
+  case "$CLAUDE_CODE_MAX_CONTEXT_TOKENS" in (*[!0-9]*) : ;; (*)
+    [ "$CLAUDE_CODE_MAX_CONTEXT_TOKENS" -ge 4096 ] && [ "$CLAUDE_CODE_MAX_CONTEXT_TOKENS" -le 1048576 ] && REAL_CTX="$CLAUDE_CODE_MAX_CONTEXT_TOKENS" ;;
+  esac
+fi
+# Preflight 3: a Claude Code binary.
+if [ -n "${CLAUDE_LOCAL_BIN:-}" ]; then
+  CLAUDE_BIN="$CLAUDE_LOCAL_BIN"
+  [ -x "$CLAUDE_BIN" ] || { echo "claude-local: CLAUDE_LOCAL_BIN=$CLAUDE_BIN is not executable" >&2; exit 1; }
+else
+  CLAUDE_BIN="$(command -v claude 2>/dev/null || true)"
+  [ -n "$CLAUDE_BIN" ] || { echo "claude-local: 'claude' not found on PATH — install Claude Code or set CLAUDE_LOCAL_BIN" >&2; exit 1; }
+fi
+mkdir -p "$CONFIG_DIR"
+[ -f "$CONFIG_DIR/CLAUDE.md" ] || printf '%s\n' "# Local model session" "You are running on a local model served by Ollama. Keep answers short and concrete; verify with tools rather than guessing." > "$CONFIG_DIR/CLAUDE.md"
+
+# Env scrub: strip any inherited Claude-session identity so this boots as a clean top-level session.
+# Every alias (opus/sonnet/haiku) maps to the local tag so a `/model` switch can never resolve to a
+# cloud model name the endpoint does not have. API_TIMEOUT_MS lets the FIRST request outlive a cold
+# model load (Ollama cancels an in-flight load when the client disconnects — a 2-minute default
+# timeout plus retry turns a slow load into a livelock).
+exec env \
+  -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_ENTRYPOINT \
+  -u CLAUDE_CODE_EXECPATH -u CLAUDE_CODE_TMPDIR -u AI_AGENT -u CLAUDE_CODE_EFFORT_LEVEL \
+  ANTHROPIC_BASE_URL="$BASE" \
+  ANTHROPIC_AUTH_TOKEN="ollama-local" \
+  ANTHROPIC_API_KEY="" \
+  ANTHROPIC_MODEL="$MODEL" \
+  ANTHROPIC_SMALL_FAST_MODEL="$MODEL" \
+  ANTHROPIC_DEFAULT_OPUS_MODEL="$MODEL" \
+  ANTHROPIC_DEFAULT_SONNET_MODEL="$MODEL" \
+  ANTHROPIC_DEFAULT_HAIKU_MODEL="$MODEL" \
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 \
+  CLAUDE_CODE_MAX_CONTEXT_TOKENS="$REAL_CTX" \
+  API_TIMEOUT_MS=600000 \
+  CLAUDE_CONFIG_DIR="$CONFIG_DIR" \
+  "$CLAUDE_BIN" "${args[@]}"

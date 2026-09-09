@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# scheme — start the Scheme server on this machine.
+#
+#   bin/scheme                start in the foreground (Ctrl+C stops it; sessions keep running in tmux)
+#   bin/scheme --port 4000    listen on another port (default 3000, loopback only)
+#   bin/scheme --doctor       print what is installed and which lanes will work, then exit
+#
+# Resolves the agent binaries the terminal lanes need and hands them to the server through the
+# COMMAND_DECK_* variables it reads. Everything it finds is printed, so "why is the Codex lane
+# missing?" is always answered on screen.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PORT="${SYSMON_PORT:-3000}"
+for arg in "$@"; do
+  case "$arg" in
+    --doctor) exec "$HERE/bin/scheme-doctor" ;;
+    --help|-h) sed -n '2,6p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+  esac
+done
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --port) PORT="$2"; shift 2 ;;
+    --port=*) PORT="${1#--port=}"; shift ;;
+    *) echo "scheme: unknown argument '$1' (try --help)" >&2; exit 2 ;;
+  esac
+done
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "scheme: '$1' is required but not installed — see INSTALL-HOST.md" >&2; exit 1; }; }
+need node; need tmux; need script
+NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
+if [ "$NODE_MAJOR" -lt 22 ]; then echo "scheme: Node 22 or newer is required (found $(node -v))" >&2; exit 1; fi
+
+# Lane binaries. Environment overrides win; otherwise the first match on PATH / the usual install spots.
+find_bin() {   # find_bin <name> <candidate...>
+  local name="$1"; shift
+  local c
+  c="$(command -v "$name" 2>/dev/null || true)"
+  if [ -n "$c" ]; then printf '%s' "$c"; return; fi
+  for c in "$@"; do [ -x "$c" ] && { printf '%s' "$c"; return; }; done
+  printf ''
+}
+CLAUDE_BIN="${COMMAND_DECK_CLAUDE:-$(find_bin claude "$HOME/.local/bin/claude" "$HOME/.claude/local/claude" "$HOME/.npm-global/bin/claude" /usr/local/bin/claude /opt/homebrew/bin/claude)}"
+CODEX_BIN="${COMMAND_DECK_CODEX:-$(find_bin codex "$HOME/.local/bin/codex" "$HOME/.npm-global/bin/codex" /usr/local/bin/codex /opt/homebrew/bin/codex)}"
+LOCAL_BIN="${COMMAND_DECK_CLAUDE_LOCAL:-$HERE/bin/claude-local}"
+
+lane() { printf '  %-12s %s\n' "$1" "$2"; }
+echo "Scheme — starting on http://127.0.0.1:$PORT"
+lane "Claude Code" "${CLAUDE_BIN:-NOT FOUND (install Claude Code, or set COMMAND_DECK_CLAUDE=/path/to/claude)}"
+lane "Codex" "${CODEX_BIN:-NOT FOUND (install the Codex CLI, or set COMMAND_DECK_CODEX=/path/to/codex)}"
+if command -v curl >/dev/null 2>&1 && curl -sf --max-time 2 "${CLAUDE_LOCAL_BASE:-http://localhost:11434}/api/version" >/dev/null 2>&1; then
+  lane "Local LLM" "$LOCAL_BIN → Ollama at ${CLAUDE_LOCAL_BASE:-http://localhost:11434} (model: ${CLAUDE_LOCAL_MODEL:-qwen3-coder:30b})"
+else
+  lane "Local LLM" "Ollama not reachable at ${CLAUDE_LOCAL_BASE:-http://localhost:11434} — the lane will refuse to start until it is"
+fi
+lane "Shell" "$(basename "${SHELL:-sh}") (always available)"
+echo "  Sessions live in tmux; stopping this server never kills them."
+echo
+
+export SYSMON_PORT="$PORT"
+[ -n "$CLAUDE_BIN" ] && export COMMAND_DECK_CLAUDE="$CLAUDE_BIN"
+[ -n "$CODEX_BIN" ] && export COMMAND_DECK_CODEX="$CODEX_BIN"
+export COMMAND_DECK_CLAUDE_LOCAL="$LOCAL_BIN"
+cd "$HERE"
+exec node server.js

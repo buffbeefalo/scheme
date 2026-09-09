@@ -1,0 +1,14 @@
+{
+  "name": "Scheme",
+  "short_name": "Scheme",
+  "description": "Drive Claude Code, Codex or a local LLM on your own machine from any browser",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#eee3cd",
+  "theme_color": "#eee3cd",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

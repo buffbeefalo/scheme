@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<!-- interactive-widget=resizes-content: the Android soft keyboard resizes the LAYOUT viewport, so the
+     terminal's flex column shrinks and the ResizeObserver refits the TUI above the keyboard. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+<meta name="theme-color" content="#eee3cd" />
+<link rel="manifest" href="/manifest.json" />
+<link rel="icon" href="/icon.svg" type="image/svg+xml" />
+<title>Scheme</title>
+<!-- Fonts are optional: every family below has a system fallback, so the page renders offline. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/vendor/xterm.css">
+<style>
+  /* Theme, header, tabs and the terminal cockpit are lifted verbatim from the fleet dashboard this
+     page was carved from (see PUBLISHING.md). Unused selectors from that page are harmless. */
+  /* ════════ CAUSEHOUSE LIGHT (2026-07-01) ════════
+     Warm-cream editorial reskin (reference: causehouse.co): Fraunces + Inter,
+     forest-green ink, sage/lime accents, thin-outline cards, zero glow. Every
+     functional selector from the dark theme survives — only the paint changed.
+     The terminal keeps a deliberate DARK well (ANSI colors need it). */
+  :root{
+    --ink:#1d2b1f; --bg:#eee3cd; --s1:#f3ead7; --s2:#f7f0e0; --s3:#e5d8bf;
+    --line:rgba(29,43,31,.14); --line2:rgba(29,43,31,.26); --line3:rgba(29,43,31,.42);
+    /* --dim and --faint are darkened from #6b7767 / #9aa392. Both carry 10-11px text on cream,
+       where the old values measured 3.34-4.15:1 and 1.86-2.30:1 — the faint tier was under half
+       the 4.5:1 minimum. Now 4.44-5.51:1 and 3.94-4.89:1. The four-step ladder still descends
+       (txt darkest, then mut, dim, faint); on a light ground the passing tiers necessarily sit
+       closer together, so size and letter-spacing carry more of the hierarchy than colour. */
+    --txt:#1d2b1f; --mut:#4f5f51; --dim:#576455; --faint:#5f6c5c;
+    --amber:#a96a1c; --amber2:#845012; --amberd:#c08a3e;
+    --cyan:#1e5bff; --cyan2:#1848cc; --green:#2f6b46; --green2:#245939;
+    --red:#c53a20; --red2:#a02d16; --yellow:#93600f; --violet:#7c63b8; --violet2:#67519e;
+    --lime:#bfea4b; --sage:#b9d9c4;
+    --well:#17211a; --well-txt:#f2ead9;
+    --disp:'Fraunces',Georgia,serif; --ui:'Inter','Segoe UI',system-ui,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,Menlo,Consolas,monospace;
+    --ease:cubic-bezier(.22,.68,.16,1); --pop:cubic-bezier(.34,1.32,.5,1); --r:14px;
+  }
+  [data-rt="claude"]{--rt:#a83d5e;--rt-soft:rgba(168,61,94,.5)}
+  [data-rt="codex"]{--rt:#0f7b86;--rt-soft:rgba(15,123,134,.5)}
+  [data-rt="local"]{--rt:#67761f;--rt-soft:rgba(103,118,31,.5)}
+  [data-rt="shell"]{--rt:#5c665c;--rt-soft:rgba(92,102,92,.45)}
+  *{box-sizing:border-box}
+  html{scrollbar-color:var(--line3) transparent}
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:7px;border:3px solid var(--bg)}
+  ::-webkit-scrollbar-thumb:hover{background:var(--line3)}
+  ::selection{background:rgba(191,234,75,.55)}
+  body{margin:0;min-height:100vh;color:var(--txt);font-family:var(--ui);font-size:13.5px;line-height:1.5;
+    background:var(--bg);overflow-x:hidden}
+  header,nav.tabs,main,footer,.critbar{position:relative;z-index:1}
+  a{color:var(--green2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  /* visible keyboard-focus ring. :focus-visible leaves mouse clicks ring-free;
+     destructive controls get a hotter (red) ring. */
+  :focus-visible{outline:2px solid var(--green);outline-offset:2px;border-radius:6px}
+  button.act.stop:focus-visible,button.act.scrape:focus-visible{outline-color:var(--red)}
+
+  /* ---------- header ---------- */
+  header{display:flex;align-items:center;gap:16px;padding:14px 24px;flex-wrap:wrap;
+    border-bottom:1px solid var(--line);background:rgba(238,227,205,.92);backdrop-filter:blur(8px)}
+  .brand{display:flex;align-items:center;gap:11px}
+  .crest{position:relative;width:34px;height:34px;flex:none;display:grid;place-items:center;
+    background:var(--sage);border:1px solid var(--line2);border-radius:10px;color:var(--ink)}
+  .crest svg{width:20px;height:20px}
+  .led{width:9px;height:9px;border-radius:50%;background:var(--green)}
+  .wordmark{font-family:var(--disp);font-weight:600;font-size:19px;letter-spacing:0;color:var(--txt)}
+  .tagline{font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:1.6px;color:var(--mut);text-transform:uppercase;
+    border:1px solid var(--line2);border-radius:999px;padding:4px 11px}
+  .host{color:var(--mut);font-size:12px}
+  .hspace{flex:1}
+  /* One flex cluster for the five stats + net pill: when the header must wrap (mid-band
+     widths) the whole row moves down as a single right-aligned unit instead of orphaning
+     SoC + pill under the brand. gap:inherit follows header's gap at every breakpoint. */
+  .hstats{display:flex;align-items:center;gap:inherit;margin-left:auto}
+  /* Mid band (701–1120px — the unfolded Z Fold is 904px): the full header needs ~1104px, so
+     drop the decorative tagline and tighten the gap; the stat row then keeps one line down to
+     ~890px and wraps as one clean unit below that. ≤700px has its own compact-header layer. */
+  @media(max-width:1120px) and (min-width:701px){
+    header{gap:10px}
+    .tagline{display:none}
+  }
+  .hstat{font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase;text-align:right}
+  .hstat b{display:block;color:var(--txt);font-family:var(--mono);font-size:13px;font-weight:500;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums}
+  .pill{font-family:var(--ui);padding:6px 13px;border-radius:999px;font-size:10.5px;font-weight:600;letter-spacing:.8px;
+    border:1px solid var(--line2);text-transform:uppercase;transition:.25s var(--ease)}
+  .pill.ok{background:var(--sage);color:var(--green2);border-color:transparent}
+  .pill.bad{background:rgba(197,58,32,.12);color:var(--red2);border-color:rgba(197,58,32,.35)}
+  .pill.warn{background:rgba(169,106,28,.1);color:var(--amber2);border-color:rgba(169,106,28,.3)}
+  .pill.idle{background:var(--s3);color:var(--mut)}
+
+  /* ---------- critical-now strip ---------- */
+  .critbar{display:flex;align-items:center;gap:14px;padding:9px 24px;flex-wrap:wrap;overflow:hidden;
+    border-bottom:1px solid var(--line);background:rgba(185,217,196,.28);transition:background .4s,border-color .4s}
+  .critbar.alert{background:rgba(197,58,32,.09);border-bottom-color:rgba(197,58,32,.3)}
+  .critbar .cb-led{width:9px;height:9px;border-radius:50%;background:var(--green);flex:none}
+  .critbar.alert .cb-led{background:var(--red)}
+  .pausebar{display:flex;align-items:center;gap:12px;padding:9px 24px;background:rgba(169,106,28,.1);
+    border-bottom:1px solid rgba(169,106,28,.3);color:var(--amber2);font-family:var(--ui);
+    letter-spacing:.3px;font-weight:600;font-size:12.5px}
+  .pausebar[hidden]{display:none}   /* class display:flex beats the UA [hidden] rule (same trap as .needbar) */
+  .pausebar button{margin-left:auto;background:var(--ink);color:var(--bg);border:0;border-radius:999px;
+    padding:7px 16px;font-weight:600;cursor:pointer;font-family:var(--ui);font-size:11px;letter-spacing:.6px;text-transform:uppercase}
+  #ctl-pause.paused{background:rgba(169,106,28,.12);border-color:rgba(169,106,28,.4);color:var(--amber2)}
+  .needbar{display:flex;flex-direction:column;gap:7px;padding:9px 24px;background:rgba(30,91,255,.07);border-bottom:1px solid rgba(30,91,255,.25)}
+  .needbar[hidden]{display:none}
+  .need-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .need-msg{font-family:var(--ui);letter-spacing:.2px;font-weight:600;font-size:12.5px;color:var(--cyan2)}
+  .need-input{flex:1;min-width:200px;background:#f8f0dd;border:1px solid rgba(30,91,255,.3);border-radius:999px;color:var(--txt);padding:7px 14px;font-size:13px;font-family:var(--ui)}
+  .need-send{background:var(--cyan);color:#fff;border:0;border-radius:999px;padding:7px 16px;font-weight:600;cursor:pointer;font-family:var(--ui);font-size:11px;letter-spacing:.5px;text-transform:uppercase}
+  .critbar .cb-title{font-family:var(--disp);font-weight:600;letter-spacing:.2px;font-size:13.5px;color:var(--green2);flex:none}
+  .critbar.alert .cb-title{color:var(--red2)}
+  .critbar .cb-faults{display:flex;flex-wrap:wrap;gap:7px}
+  .critbar .cb-ok{font-family:var(--ui);letter-spacing:.4px;font-size:11px;color:var(--mut)}
+  /* Each chip is a button now: it names a bot, so it should take you to that bot. */
+  .critbar .fault{font-family:var(--mono);background:rgba(197,58,32,.1);border:1px solid rgba(197,58,32,.3);
+    color:var(--red2);padding:3px 10px;border-radius:999px;font-size:11px;animation:rise .4s var(--ease) both;
+    cursor:pointer;line-height:1.5;transition:background .18s,border-color .18s}
+  .critbar .fault:hover{background:rgba(197,58,32,.18);border-color:rgba(197,58,32,.55)}
+  /* The alarm follows you down a 6,000px page; "All Systems Nominal" does not need to. */
+  .critbar.alert{position:sticky;top:0;z-index:10}
+  /* A faulted bot row was a 7% wash — 1.079:1 against a healthy row, effectively invisible.
+     Same idiom as .q-err: a real left rule you can spot while scrolling. */
+  #bots tr.warn-row{background:rgba(169,106,28,.07);box-shadow:inset 3px 0 0 var(--amber)}
+  #bots tr.flash{animation:rowflash 1.6s var(--ease) both}
+  @keyframes rowflash{0%,60%{background:rgba(191,234,75,.5)}100%{background:transparent}}
+
+  /* ---------- tabs ---------- */
+  /* The strip must SCROLL, not spill. Between 701px (where the mobile dock stops) and ~1105px
+     (where all ten tabs finally fit) the row is wider than the viewport; without a scroller,
+     body{overflow-x:hidden} simply clipped Council and About off the right edge with no way to
+     reach them — which is exactly the Z Fold 4's unfolded 904px width. */
+  /* --cb-h is the pinned fault bar's height (0 when there are no faults), kept in sync by JS so
+     the tab strip parks directly underneath it instead of sliding behind it. */
+  nav.tabs{position:sticky;top:var(--cb-h,0px);z-index:9;display:flex;gap:5px;padding:9px 24px;
+    overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;
+    background:rgba(238,227,205,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  nav.tabs::-webkit-scrollbar{display:none}
+  nav.tabs button{flex:none;position:relative;display:inline-flex;align-items:center;gap:7px;background:none;border:1px solid transparent;color:var(--mut);cursor:pointer;
+    font-family:var(--ui);font-size:12.5px;font-weight:600;letter-spacing:.2px;
+    padding:8px 15px;border-radius:999px;transition:color .2s,background .2s,border-color .2s}
+  nav.tabs button svg{width:15px;height:15px;flex:none}
+  nav.tabs button:hover{color:var(--txt);background:rgba(29,43,31,.05)}
+  nav.tabs button.active{color:var(--bg);background:var(--ink)}
+  /* Overflow affordance: the strip scrolls with its scrollbar hidden, so at mid-band widths
+     (unfolded Z Fold 904px) Architecture+About sit invisibly off-screen. When tabs are clipped
+     on the right, a sticky chevron marks it; tapping scrolls. JS toggles .tabs-clipped. */
+  nav.tabs .tabs-more{position:sticky;right:0;display:none;flex:none;align-items:center;
+    padding:6px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--sage);
+    color:var(--ink);font-size:14px;line-height:1;cursor:pointer;
+    box-shadow:-12px 0 12px -6px rgba(238,227,205,.9)}
+  nav.tabs.tabs-clipped .tabs-more{display:inline-flex}
+  /* solid, not 38% alpha: composited over cream the translucent ring measured 1.70:1, under the
+     3:1 that a focus indicator needs. Solid --cyan on --bg is 4.13:1 and looks the same shape. */
+  button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,[role="tab"]:focus-visible{
+    outline:3px solid var(--cyan);outline-offset:2px}
+  .source-strip{min-height:28px;display:flex;align-items:center;gap:7px;overflow-x:auto;padding:4px 24px;
+    border-bottom:1px solid var(--line);background:var(--s1);font-family:var(--ui);font-size:10px;color:var(--dim);white-space:nowrap}
+  .source-chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:2px 8px;background:var(--s2)}
+  .source-chip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--faint)}
+  .source-chip.ok::before{background:var(--green)}.source-chip.stale::before{background:var(--yellow)}
+  .source-chip.bad{color:var(--red2);border-color:rgba(197,58,32,.25)}.source-chip.bad::before{background:var(--red)}
+
+  /* ---------- layout ---------- */
+  main{padding:22px 24px;max-width:1580px;margin:0 auto;display:grid;grid-template-columns:repeat(12,1fr);gap:16px}
+  .view{display:none}.view.active{display:grid}
+  /* Grid rows stretch by default, so a short card chained to a tall neighbour inherits its
+     height and prints the difference as empty cream — measured at 689px on Monitor and 302px
+     on Quality. These two views size every card to its own content, the way the phone
+     breakpoint below already does. Views that switch to flex (courses) are deliberately
+     excluded: align-items there governs the horizontal axis and would unstretch the layout. */
+  #view-monitor.active,#view-quality.active{align-items:start}
+  .panel{position:relative;background:var(--s2);
+    border:1px solid var(--line);border-radius:var(--r);padding:18px 18px 17px;
+    box-shadow:0 1px 2px rgba(29,43,31,.04);
+    transition:border-color .25s var(--ease),transform .25s var(--ease)}
+  .panel:hover{border-color:var(--line2);transform:translateY(-2px)}
+  /* The staggered entrance is a first-paint flourish, not a tab-switch transition. showTab()
+     re-adds .active on every switch, so ungated it replayed the whole 0.84s stagger each time
+     you came back to Monitor — panel 09 stayed invisible for most of a second on an ops board
+     where returning to a view means you want to read it now. body.booting is dropped once. */
+  body.booting .view.active .panel,body.booting .view.active .ctl-card{animation:rise .5s var(--ease) both}
+  body.booting .view.active .panel:nth-child(1){animation-delay:.02s}body.booting .view.active .panel:nth-child(2){animation-delay:.06s}
+  body.booting .view.active .panel:nth-child(3){animation-delay:.1s}body.booting .view.active .panel:nth-child(4){animation-delay:.14s}
+  body.booting .view.active .panel:nth-child(5){animation-delay:.18s}body.booting .view.active .panel:nth-child(6){animation-delay:.22s}
+  body.booting .view.active .panel:nth-child(7){animation-delay:.26s}body.booting .view.active .panel:nth-child(8){animation-delay:.3s}
+  body.booting .view.active .panel:nth-child(9){animation-delay:.34s}
+  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  h2{font-family:var(--disp);font-size:15px;letter-spacing:.2px;color:var(--txt);
+    margin:0 0 13px;font-weight:600;display:flex;align-items:center;gap:9px}
+  h2 .tag{margin-left:auto;color:var(--dim);font-weight:400;letter-spacing:0;font-size:10.5px;font-family:var(--mono)}
+
+  .col3{grid-column:span 3}.col4{grid-column:span 4}.col5{grid-column:span 5}
+  .col6{grid-column:span 6}.col7{grid-column:span 7}.col8{grid-column:span 8}.col12{grid-column:span 12}
+  /* a short card paired with a tall one (Disk, Connectivity) sizes to its content instead of
+     stretching to the neighbour's height — kills the big empty void inside the card */
+  .nostretch{align-self:start}
+  .dl{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--green2);text-decoration:none;border:1px solid var(--line2);border-radius:999px;padding:2px 10px;transition:background .2s,border-color .2s}
+  .dl:hover{background:var(--s3);border-color:var(--green)}
+  /* black box (crash flight-recorder) panel */
+  #bb-panel .bb-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:9px}
+  .bb-dot{width:9px;height:9px;border-radius:50%;background:var(--green);flex:none}
+  .bb-dot.elevated{background:var(--amber)}
+  .bb-dot.critical{background:var(--red);animation:pulse 1s infinite}
+  #bb-status{color:var(--txt);font-size:12px;font-variant-numeric:tabular-nums}
+  .bb-risk{font-family:var(--ui);font-size:9.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;padding:2px 10px;border-radius:999px;border:1px solid var(--line2);white-space:nowrap}
+  .bb-risk.ok{color:var(--green2)}
+  .bb-risk.elevated{color:var(--amber2);border-color:rgba(169,106,28,.4)}
+  .bb-risk.critical{color:var(--red2);border-color:rgba(197,58,32,.4)}
+  .bb-reports{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  .bb-rep-title{color:var(--mut);font-size:11px;width:100%;margin-bottom:2px}
+  .bb-none{color:var(--mut);font-size:11.5px}
+  .bb-rep{font-size:11px}
+  /* open-URL toast: a link Claude tried to open lands here so it opens on YOUR device, not the box */
+  .toast-wrap{position:fixed;right:18px;bottom:18px;z-index:99999;display:flex;flex-direction:column;gap:10px;max-width:390px}
+  .toast{background:var(--s2);border:1px solid var(--line2);border-left:3px solid var(--cyan);border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(29,43,31,.16);animation:rise .3s var(--ease) both}
+  .toast .tt{font-family:var(--ui);font-weight:600;font-size:11px;letter-spacing:.3px;color:var(--mut);margin-bottom:5px}
+  .toast .tu{font-family:var(--mono);font-size:12px;color:var(--cyan2);word-break:break-all;margin-bottom:9px;max-height:48px;overflow:hidden}
+  .toast .tb{display:flex;gap:8px;justify-content:flex-end}
+  .toast button{font-family:var(--ui);font-size:11px;font-weight:600;letter-spacing:.3px;padding:5px 13px;border-radius:999px;cursor:pointer;border:1px solid var(--line2);background:var(--s2);color:var(--txt)}
+  .toast button.go{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+  .toast button:hover{background:var(--s3)}
+  .toast button.go:hover{background:var(--green2)}
+  @media(max-width:1120px){.col3{grid-column:span 6}.col4,.col5,.col7,.col8{grid-column:span 12}.col6{grid-column:span 12}}
+  @media(max-width:680px){.col3{grid-column:span 12}}
+
+  .fb{grid-column:1/-1;font-size:11.5px;margin:1px 0 0;min-height:16px}
+  .fb.working{color:var(--amber2)}.fb.ok{color:var(--green2)}.fb.bad{color:var(--red2)}
+  .warn-note{color:var(--amber2);font-size:11.5px;margin-top:10px;font-family:var(--ui);letter-spacing:0}
+
+  footer{text-align:center;padding:24px;color:var(--dim);font-size:11px;letter-spacing:.2px;font-family:var(--ui)}
+  .offline-banner{display:none;background:rgba(197,58,32,.1);color:var(--red2);text-align:center;padding:8px;
+    font-family:var(--ui);font-weight:600;font-size:12px;letter-spacing:.3px;border-bottom:1px solid rgba(197,58,32,.3)}
+  .offline-banner.show{display:block}
+
+  /* ---------- terminal tab · Command Deck "Cockpit" ---------- */
+  /* BULLETPROOF FULL-VIEWPORT LAYOUT. On the terminal tab the <body> itself becomes a
+     viewport-height flex column: nav on top, terminal view fills the rest. No height
+     calc(), no dvh-on-element, no JS height — flexbox derives the terminal's size from the
+     real viewport so it can't be computed wrong. A ResizeObserver then drives the xterm
+     fit off the real container size. Scoped to body.term-tab; Monitor/Controls untouched. */
+  body.term-tab{display:flex;flex-direction:column;height:100vh;height:100dvh;overflow:hidden}
+  body.term-tab footer{display:none}
+  /* keep the Command Deck logo on the terminal tab — just slim the header (drop the stat chips) */
+  body.term-tab nav.tabs{position:static;flex:none}
+  #view-terminal.active{display:flex;flex-direction:column;flex:1;min-height:0;width:100%;max-width:none;margin:0;padding:8px 10px}
+  /* Touch key bar — TUI keys a soft keyboard lacks. Hidden on fine-pointer desktops;
+     body.kb-force shows it anywhere (debug / Playwright verification). */
+  .cd-keybar{display:none;flex:none;gap:7px;padding:7px 9px;margin-top:7px;overflow-x:auto;scrollbar-width:none;background:var(--s1);border:1px solid var(--line);border-radius:12px}
+  .cd-keybar::-webkit-scrollbar{display:none}
+  .cd-keybar button{flex:1 0 auto;min-width:44px;height:40px;padding:0 11px;font-family:var(--mono);font-size:12.5px;color:var(--txt);background:var(--s2);border:1px solid var(--line2);border-radius:9px;touch-action:manipulation;cursor:pointer}
+  .cd-keybar button:active{background:var(--sage);border-color:var(--green);color:var(--green2)}
+  @media (pointer:coarse){ body.term-tab .cd-keybar{display:flex} }
+  body.kb-force .cd-keybar{display:flex}
+  .cd-lock{display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:60vh;text-align:center}
+  .cd-lock .ico{color:var(--green2)}
+  .cd-lock h3{font-family:var(--disp);letter-spacing:.2px;color:var(--txt);margin:0;font-size:19px;font-weight:600}
+  .cd-lock p{color:var(--mut);max-width:580px;line-height:1.75;margin:0}
+  .cd-lock code{background:var(--s1);border:1px solid var(--line2);border-radius:6px;padding:3px 9px;color:var(--green2);font-size:12.5px;font-family:var(--mono)}
+  /* full-screen terminal: slim top bar (sessions + new + zoom), then the xterm fills the rest */
+  .cd-studio{display:flex;flex-direction:column;flex:1;min-height:0}
+  /* terminal stage + telemetry rail side by side; the ResizeObserver on #cd-host refits
+     xterm when the rail takes/returns width. Rail collapses on narrow viewports. */
+  .cd-stagewrap{display:flex;flex:1;min-height:0;gap:9px}
+  .cd-rail{width:300px;flex:none;min-height:0}
+  .cd-studio[data-rt] .cd-rail.cd-panel{border-top:2px solid var(--rt)}
+  .cd-studio.rail-off .cd-stagewrap .cd-rail{display:none}
+  @media(max-width:900px){.cd-stagewrap .cd-rail{display:none}}
+  /* Wraps at ANY width, not only on phones. The Claude+Codex strip needs ~1146px; unwrapped it
+     inflated the whole page's scroll width by ~264px at the Z Fold's unfolded 904px. */
+  .cd-usagebar{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;gap:14px;flex:none;padding:7px 10px;font-family:var(--mono);font-size:10px;line-height:14px;font-variant-numeric:tabular-nums;color:var(--dim);background:var(--s2);border-top:1px solid var(--line)}
+  .cd-usagegrp{display:flex;flex-wrap:wrap;row-gap:2px;align-items:center;gap:7px;min-width:0;white-space:nowrap}
+  .cd-usagegrp .prov{font-family:var(--ui);font-weight:700;letter-spacing:.7px;text-transform:uppercase}
+  .cd-usagegrp.claude .prov{color:#a83d5e}.cd-usagegrp.codex .prov{color:#0f7b86}
+  .cd-usagegrp .age{color:var(--dim)}.cd-usagegrp .bad{color:var(--red2)}
+  .cd-um{display:inline-block;width:48px;height:6px;overflow:hidden;vertical-align:middle;background:var(--line2);border-radius:999px}
+  .cd-um > i{display:block;height:100%}
+  .cd-studio:not([data-rt="claude"]):not([data-rt="codex"]) .cd-usagebar{display:none!important}
+  /* command bar. z-index is load-bearing: the bar must be a stacking context above the
+     terminal host so the ＋New popover (a bar child) paints OVER it. */
+  .cd-bar{display:flex;align-items:center;gap:9px;padding:6px 9px;border:1px solid var(--line);border-radius:12px;background:var(--s2);flex:none;position:relative;margin-bottom:9px;z-index:31}
+  /* Under 1200px the bar cannot hold New + Image + a usable lane + the whole well on one row, so
+     the lane takes a full second row and the well moves behind a Tools disclosure. Measured
+     before this: the lane got 263px at 904px (1 pill of 17) and 110px at 412px (none). */
+  @media(max-width:1200px){
+    .cd-bar{flex-wrap:wrap}
+    .cd-lane{order:3;flex:1 0 100%;min-width:0}
+    .cd-toolsbtn{display:inline-flex;align-items:center;margin-left:auto}
+    .cd-bar .cd-well{display:none}
+    .cd-bar.tools-open .cd-well{display:flex;order:4;flex:1 0 100%;overflow-x:auto}
+    .cd-lnav,.cd-count{min-height:32px}
+  }
+  /* Touch widths: the ratified 44px minimum for the lane's own controls. */
+  @media(max-width:700px){
+    .cd-lnav{width:34px;min-height:44px}
+    .cd-count{min-height:44px;padding:0 10px}
+    .cd-count .ow{display:none}          /* "off-screen" word costs ~70px here; the count stays */
+    .cd-toolsbtn{min-height:44px}
+  }
+  .cd-dims{font-family:var(--mono);font-size:10px;color:var(--dim);white-space:nowrap;flex:none;font-variant-numeric:tabular-nums}
+  .cd-tok{font-family:var(--mono);font-size:10px;color:var(--mut);white-space:nowrap;flex:none;font-variant-numeric:tabular-nums;padding:2px 7px;border:1px solid var(--line2);border-radius:999px}
+  .cd-newbtn{font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;border:1px solid var(--ink);background:var(--ink);color:var(--bg);border-radius:999px;padding:7px 14px;cursor:pointer;transition:.14s;white-space:nowrap;flex:none}
+  .cd-newbtn:hover{background:var(--green2);border-color:var(--green2)}
+  #cd-img{background:var(--s2);border-color:var(--line2);color:var(--mut)}
+  #cd-img:hover{border-color:var(--cyan);color:var(--cyan2)}
+  #cd-img.cd-img-flash{border-color:var(--cyan);color:var(--cyan2);max-width:260px;overflow:hidden;text-overflow:ellipsis}
+  /* Session lane. The lane is the flex child now; the well may finally shrink (flex:0 1 auto)
+     instead of pinning ~425px while the strip starved. Fades + arrows + a count are the
+     GUARANTEED overflow affordance — the native scrollbar measured 0px tall at every width. */
+  .cd-lane{display:flex;align-items:center;gap:4px;flex:1 1 auto;min-width:0;position:relative}
+  .cd-bar .cd-sessions{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;overflow-x:auto;scrollbar-width:none;padding:1px 6px;scroll-behavior:smooth}
+  .cd-bar .cd-sessions::-webkit-scrollbar{display:none}
+  /* Slider under the names: shown only while pills overflow; the thumb is the visible share of the strip. */
+  .cd-strip{display:flex;flex-direction:column;flex:1 1 auto;min-width:0;gap:3px}
+  .cd-lane-track{display:none;position:relative;height:6px;margin:0 6px;border-radius:3px;background:var(--line);cursor:pointer;touch-action:none}
+  .cd-strip.has-overflow .cd-lane-track{display:block}
+  .cd-lane-thumb{position:absolute;top:0;bottom:0;left:0;width:40px;border-radius:3px;background:var(--mut);cursor:grab;transition:background .15s}
+  .cd-lane-thumb:hover{background:var(--green2)}
+  .cd-lane-thumb.grabbing{background:var(--green2);cursor:grabbing}
+  @media(pointer:coarse){.cd-lane-track{height:10px;border-radius:5px}}
+  .cd-lane::before,.cd-lane::after{content:"";position:absolute;top:0;bottom:0;width:18px;pointer-events:none;opacity:0;transition:opacity .15s var(--ease);z-index:2}
+  /* Anchored to the strip's MEASURED edges (set by measureLane), not a guessed offset — the count
+     button's width changes with the off-screen number, so a fixed inset drifts off the scroll area. */
+  .cd-lane::before{left:var(--fade-l,22px);background:linear-gradient(90deg,var(--s2),transparent)}
+  .cd-lane::after{right:var(--fade-r,96px);background:linear-gradient(270deg,var(--s2),transparent)}
+  .cd-lane.more-left::before,.cd-lane.more-right::after{opacity:1}
+  .cd-lnav{flex:none;width:22px;height:26px;display:grid;place-items:center;border:1px solid var(--line);background:var(--s1);
+    color:var(--mut);border-radius:8px;cursor:pointer;font-size:14px;line-height:1;padding:0;transition:.14s}
+  .cd-lnav:hover:not(:disabled){border-color:var(--green);color:var(--green2)}
+  .cd-lnav:disabled{opacity:.28;cursor:default}
+  .cd-count{flex:none;display:inline-flex;align-items:center;gap:4px;font-family:var(--ui);font-size:10.5px;font-weight:600;
+    letter-spacing:.4px;border:1px solid var(--line2);background:var(--s1);color:var(--mut);border-radius:999px;padding:5px 10px;cursor:pointer;white-space:nowrap;transition:.14s}
+  .cd-count:hover{border-color:var(--green);color:var(--green2)}
+  .cd-count b{font-size:11.5px;color:var(--txt);font-variant-numeric:tabular-nums}
+  .cd-count i{font-style:normal;color:var(--amber2);font-variant-numeric:tabular-nums}
+  /* off-screen aggregate: if anything hidden needs you, the count says so in its own colour */
+  .cd-count[data-agg="needs-input"]{border-color:var(--cyan2);color:var(--cyan2)}
+  .cd-count[data-agg="needs-input"] i{color:var(--cyan2)}
+  .cd-count[data-agg="busy"] i{color:var(--amber2)}
+  .cd-toolsbtn{display:none;flex:none;font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:.4px;
+    border:1px solid var(--line2);background:var(--s1);color:var(--mut);border-radius:999px;padding:6px 11px;cursor:pointer;white-space:nowrap}
+  .cd-toolsbtn:hover{border-color:var(--green);color:var(--green2)}
+  /* Switcher dialog — every session reachable regardless of lane width. */
+  /* [hidden] MUST be restated: an author `display:flex` beats the UA sheet's [hidden]{display:none},
+     which would leave the dialog permanently on screen. */
+  .cd-switcher[hidden]{display:none}
+  .cd-switcher{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:60;max-height:min(60vh,420px);display:flex;flex-direction:column;
+    border:1px solid var(--line2);border-radius:12px;background:var(--s1);box-shadow:0 12px 34px rgba(29,43,31,.18);overflow:hidden}
+  .cd-sw-head{display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--line);flex:none}
+  .cd-sw-head input{flex:1;min-width:0;font-family:var(--ui);font-size:12.5px;color:var(--txt);background:var(--s2);
+    border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+  .cd-sw-head input:focus{outline:2px solid var(--green);outline-offset:1px}
+  .cd-sw-n{font-family:var(--ui);font-size:10px;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .cd-sw-x{border:1px solid var(--line);background:var(--s2);color:var(--mut);border-radius:8px;width:26px;height:26px;cursor:pointer;flex:none}
+  .cd-sw-list{overflow-y:auto;padding:6px}
+  .cd-sw-row{display:flex;align-items:flex-start;gap:9px;padding:8px 9px;border-radius:9px;border:1px solid transparent;cursor:pointer;width:100%;text-align:left;background:none;font-family:var(--ui)}
+  .cd-sw-row:hover,.cd-sw-row.sel{background:var(--s3);border-color:var(--line)}
+  .cd-sw-row[aria-selected="true"]{background:var(--sage);border-color:rgba(47,107,70,.4)}
+  .cd-sw-row>.cd-dot{margin-top:4px;flex:none}
+  /* Two lines: identity + live state on top, the labelled durations and occupancy beneath. */
+  .cd-sw-row .sw-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .cd-sw-row .sw-top{display:flex;align-items:baseline;gap:8px;min-width:0}
+  .cd-sw-row .sw-nm{flex:1;min-width:0;font-size:12.5px;color:var(--txt);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cd-sw-row .sw-attn{font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--s1);background:var(--green2);border-radius:3px;padding:1px 4px;white-space:nowrap}
+  .cd-sw-row .sw-meta{font-size:10px;color:var(--dim);white-space:nowrap;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+  .cd-sw-row .sw-state{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;white-space:nowrap;color:var(--mut)}
+  /* The duration sits OUTSIDE the uppercase run: "41m" uppercased to "41M" reads as months. */
+  .cd-sw-row .sw-dur{font-size:10px;white-space:nowrap;color:var(--dim);font-variant-numeric:tabular-nums}
+  .cd-sw-row .sw-state[data-s="needs-input"]{color:var(--cyan2)}
+  .cd-sw-row .sw-state[data-s="busy"]{color:var(--amber2)}
+  .cd-sw-row .sw-state[data-s="waiting"]{color:var(--violet2)}
+  .cd-sw-row .sw-state[data-s="idle"]{color:var(--green2)}
+  .cd-sw-empty{padding:16px 10px;text-align:center;font-family:var(--ui);font-size:12px;color:var(--dim)}
+  @media(prefers-reduced-motion:reduce){.cd-bar .cd-sessions{scroll-behavior:auto}.cd-lane::before,.cd-lane::after{transition:none}}
+  .cd-bar .cd-sess{position:relative;display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:999px;border:1px solid transparent;cursor:grab;white-space:nowrap;flex:none;margin:0;transition:background .15s var(--ease),border-color .15s var(--ease),opacity .12s}
+  .cd-bar .cd-sess:hover{background:var(--s3);border-color:var(--line)}
+  .cd-bar .cd-sess.active{background:var(--sage);border-color:rgba(47,107,70,.4)}
+  .cd-bar .cd-sess.dragging{opacity:.35;cursor:grabbing;border-style:dashed;border-color:var(--line2)}
+  /* drag-to-reorder: a green insertion bar marks EXACTLY where the tab will land
+     (left/right edge by pointer half); the hovered tab tints so the target is unmissable */
+  .cd-bar .cd-sess.drop-before,.cd-bar .cd-sess.drop-after{background:rgba(185,217,196,.4);border-color:rgba(47,107,70,.35)}
+  .cd-bar .cd-sess.drop-before::before,.cd-bar .cd-sess.drop-after::after{content:"";position:absolute;top:-4px;bottom:-4px;width:3px;
+    border-radius:2px;background:var(--green);z-index:5;pointer-events:none}
+  .cd-bar .cd-sess.drop-before::before{left:-5px}
+  .cd-bar .cd-sess.drop-after::after{right:-5px}
+  /* while a drag is live, dim the non-participants so the indicator pops */
+  .cd-sessions.drag-live .cd-sess:not(.dragging):not(.drop-before):not(.drop-after){opacity:.7}
+  .cd-bar .cd-sess .nm{font-size:12px;color:var(--txt);max-width:180px;overflow:hidden;text-overflow:ellipsis;font-weight:500;font-family:var(--ui)}
+  .cd-bar .cd-sess .cd-rtag{font-size:11px;line-height:1;color:var(--rt);border:1px solid var(--rt-soft);border-radius:4px;padding:1px 4px}
+  .cd-bar .cd-sess .cd-x{color:var(--mut);font-size:14px;font-weight:600;line-height:1;padding:2px 6px;border-radius:6px;opacity:.9;transition:.14s}
+  .cd-bar .cd-sess button.cd-x{font-family:inherit;background:none;border:0;cursor:pointer}
+  .cd-bar .cd-sess .cd-x:hover{color:#fff;opacity:1;background:var(--red)}
+  /* the ✕ whispers until you mean it (fine pointers only — touch keeps it solid) */
+  @media(pointer:fine){
+    .cd-bar .cd-sess .cd-x{opacity:.25}
+    .cd-bar .cd-sess:hover .cd-x,.cd-bar .cd-sess.active .cd-x{opacity:.95}
+  }
+  .cd-zoom{font-family:var(--mono);font-size:13px;border:1px solid var(--line2);background:var(--s2);color:var(--txt);border-radius:8px;padding:4px 9px;cursor:pointer;transition:.15s;flex:none;line-height:1}
+  .cd-zoom:hover{border-color:var(--green);color:var(--green2)}
+  .cd-bar .cd-pop{top:46px;left:9px;right:auto}
+  #view-terminal #cd-host{border:1px solid var(--line2);border-radius:12px}
+  .cd-panel{border:1px solid var(--line);border-radius:var(--r);background:var(--s2);
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 1px 2px rgba(29,43,31,.04)}
+  .cd-phead{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line);flex:none}
+  .cd-phead h3{font-family:var(--ui);font-size:9.5px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut);margin:0}
+  .cd-phead .sp{margin-left:auto}
+  .cd-icon{width:24px;height:24px;display:grid;place-items:center;border:1px solid var(--line2);background:var(--s2);color:var(--mut);border-radius:8px;cursor:pointer;font-size:15px;line-height:1;transition:.14s}
+  .cd-icon:hover{border-color:var(--green);color:var(--green2)}
+  /* sidebar: sessions (top) + file tree (fills) */
+  .cd-side{position:relative}
+  .cd-side .cd-sessions{max-height:40%;overflow-y:auto;padding:8px 9px}
+  .cd-sess{position:relative;display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:10px;border:1px solid transparent;cursor:pointer;margin-bottom:6px;transition:.15s var(--ease)}
+  .cd-sess:hover{background:var(--s3);border-color:var(--line)}
+  .cd-sess.active{background:var(--sage);border-color:rgba(47,107,70,.4)}
+  .cd-sess .meta{min-width:0;flex:1}
+  .cd-sess .nm{display:block;font-size:12.5px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;font-family:var(--ui)}
+  .cd-sess .pj{display:block;font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--ui);letter-spacing:.2px}
+  .cd-sess .cd-x{opacity:0;color:var(--dim);font-size:12px;padding:2px 6px;border-radius:4px;transition:.14s}
+  .cd-sess:hover .cd-x{opacity:1}
+  .cd-sess .cd-x:hover{color:var(--red2);background:rgba(197,58,32,.1)}
+  .cd-dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none;transition:background .3s}
+  .cd-sess.st-live .cd-dot{background:var(--green)}
+  .cd-sess.st-live.busy .cd-dot{animation:pulse 2s infinite}
+  .cd-sess.st-connecting .cd-dot,.cd-sess.st-reconnecting .cd-dot{background:var(--yellow);animation:blink 1s steps(2,start) infinite}
+  /* per-tab "is Claude done?" cue (bar tabs): amber pulsing dot = Claude working, green = done.
+     A tab that finishes while you're on another tab gets a green dot until you open it. */
+  .cd-bar .cd-sess.st-live .cd-dot{background:var(--green)}
+  .cd-bar .cd-sess.st-live.busy .cd-dot{background:var(--amberd);animation:pulse 1.1s infinite}
+  .cd-bar .cd-sess.attn .cd-dot{background:var(--green);animation:none}
+  .cd-bar .cd-sess.attn{border-color:rgba(47,107,70,.55)}
+  .cd-bar .cd-sess.attn .nm{color:var(--green2)}
+  /* "turn finished" = expanding ring ping off the dot, not just a tint */
+  .cd-bar .cd-sess .cd-dot{position:relative}
+  .cd-bar .cd-sess.attn .cd-dot::after{content:"";position:absolute;inset:-3px;border-radius:50%;
+    border:1px solid var(--green);animation:ping 1.6s var(--ease) infinite}
+  @keyframes ping{0%{transform:scale(.5);opacity:.9}80%,100%{transform:scale(2.1);opacity:0}}
+  /* needs-input: a session is BLOCKED waiting on YOU (AskUserQuestion / plan approval).
+     Blue — louder than the green "done" cue, distinct from amber "working". paint() emits
+     `needs-input` INSTEAD of `busy`; defined after `attn` so it wins if a tab is somehow both.
+     Motion is auto-stripped by body.calm and the reduced-motion block below. */
+  .cd-bar .cd-sess.needs-input .cd-dot{background:var(--cyan);animation:pulse 1.2s infinite}
+  .cd-bar .cd-sess.needs-input{border-color:rgba(30,91,255,.5);background:rgba(30,91,255,.08)}
+  .cd-bar .cd-sess.needs-input .nm{color:var(--cyan2)}
+  .cd-bar .cd-sess.needs-input .cd-dot::after{content:"";position:absolute;inset:-3px;border-radius:50%;
+    border:1px solid var(--cyan);animation:ping 1.3s var(--ease) infinite}
+  /* waiting: the tab is idle for YOU, but a subagent/workflow it spawned is still running. Violet —
+     distinct from cyan needs-input, amber busy, and green done. A slow, calm breathe (not the urgent
+     needs-input pulse): it's "working in the background," not "waiting on you". paint() emits `waiting`
+     INSTEAD of `busy`, and needs-input still wins over it. */
+  .cd-bar .cd-sess.waiting .cd-dot{background:var(--violet);animation:breathe 2.6s ease-in-out infinite}
+  .cd-bar .cd-sess.waiting{border-color:rgba(124,99,184,.5);background:rgba(124,99,184,.08)}
+  .cd-bar .cd-sess.waiting .nm{color:var(--violet2)}
+  .cd-bar .cd-sess.telemetry-unknown.lifecycle-unknown:not(.needs-input):not(.waiting):not(.busy) .cd-dot{background:var(--faint);box-shadow:0 0 0 2px rgba(154,163,146,.22)}
+  .cd-bar .cd-sess.telemetry-unknown:not(.needs-input):not(.waiting):not(.busy) .nm{color:var(--mut)}
+  @keyframes breathe{0%,100%{opacity:.55}50%{opacity:1}}
+  @keyframes blink{50%{opacity:.2}}
+  .cd-files-head{border-top:1px solid var(--line)}
+  .cd-cwd{font-family:var(--mono);font-size:10px;color:var(--green2);max-width:118px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cd-tree{flex:1;overflow:auto;padding:6px 7px;font-size:12px}
+  .cd-trow{display:flex;align-items:center;gap:5px;padding:3px 6px;border-radius:6px;cursor:pointer;color:var(--mut);white-space:nowrap;user-select:none}
+  .cd-trow:hover{background:var(--s3);color:var(--txt)}
+  .cd-trow .tw{width:11px;flex:none;color:var(--dim);text-align:center;font-size:9px}
+  .cd-trow .ic{flex:none;width:14px;text-align:center}
+  .cd-trow.dir .nm{color:var(--txt)}
+  .cd-trow .nm{overflow:hidden;text-overflow:ellipsis;font-family:var(--mono)}
+  .cd-trow.up{color:var(--dim);font-family:var(--ui);letter-spacing:.8px;font-size:10px;text-transform:uppercase}
+  .cd-tree .empty{color:var(--dim);font-size:11px;padding:8px;font-style:italic}
+  /* stage = header | terminal | quick-bar | composer */
+  .cd-stage{padding:0;min-width:0}
+  .cd-stage-head{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--line);flex:none}
+  .cd-stage-head .proj{font-family:var(--mono);font-size:11px;color:var(--green2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:30%}
+  .cd-model{font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:.5px;color:var(--mut);padding:2px 8px;border:1px solid var(--line2);border-radius:999px;text-transform:uppercase;white-space:nowrap}
+  .cd-modepill{font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:3px 10px;border-radius:999px;cursor:pointer;transition:.15s;border:1px solid var(--line2);color:var(--mut);white-space:nowrap}
+  .cd-modepill:hover{background:var(--s3)}
+  .cd-modepill.auto{color:var(--amber2);border-color:rgba(169,106,28,.4);background:rgba(169,106,28,.08)}
+  .cd-modepill.plan{color:var(--cyan2);border-color:rgba(30,91,255,.35);background:rgba(30,91,255,.07)}
+  .cd-modepill.acceptEdits{color:var(--green2);border-color:rgba(47,107,70,.4);background:rgba(185,217,196,.35)}
+  .cd-modepill.bypassPermissions{color:var(--red2);border-color:rgba(197,58,32,.35);background:rgba(197,58,32,.08)}
+  .cd-ctx{font-family:var(--mono);font-size:10px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .cd-ctx b{color:var(--amber2)}
+  .cd-iconbtn{font-family:var(--mono);font-size:12px;border:1px solid var(--line2);background:var(--s2);color:var(--mut);border-radius:8px;padding:4px 8px;cursor:pointer;transition:.15s;line-height:1}
+  .cd-iconbtn:hover{border-color:var(--green);color:var(--green2)}
+  .cd-iconbtn.on{color:var(--green2);border-color:rgba(47,107,70,.45);background:rgba(185,217,196,.35)}
+  .cd-btn{font-family:var(--ui);font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;border:1px solid var(--line3);
+    background:var(--s2);color:var(--txt);border-radius:999px;padding:6px 13px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .cd-btn:hover{border-color:var(--green);color:var(--green2)}
+  /* the terminal WELL: deliberately dark — ANSI colors need it */
+  .cd-host{position:relative;flex:1;background:var(--well);overflow:hidden;min-height:120px}
+  #cd-host::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--rt,transparent);z-index:5;pointer-events:none}
+  /* image drag-and-drop */
+  .cd-drop-overlay{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+    background:rgba(23,33,26,.9);border:2px dashed rgba(191,234,75,.7);border-radius:12px;pointer-events:none;opacity:0;transition:opacity .15s var(--ease)}
+  .cd-drop-overlay.active{opacity:1;pointer-events:none}
+  .cd-drop-ico{color:var(--lime)}
+  .cd-drop-lbl{font-family:var(--ui);font-size:12px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--lime)}
+  .cd-attach-bar{position:absolute;bottom:0;left:0;right:0;z-index:15;display:flex;align-items:center;gap:8px;
+    padding:7px 10px;background:rgba(23,33,26,.97);border-top:1px solid rgba(242,234,217,.16);
+    transform:translateY(100%);transition:transform .22s var(--ease)}
+  .cd-attach-bar.show{transform:none}
+  .cd-attach-items{display:flex;align-items:center;gap:7px;flex:1;overflow-x:auto;min-width:0;scrollbar-width:thin}
+  .cd-attach-chip{display:flex;align-items:center;gap:6px;border:1px solid rgba(242,234,217,.2);border-radius:7px;
+    padding:3px 8px 3px 4px;background:rgba(242,234,217,.08);flex:none;max-width:220px;animation:rise .2s var(--ease) both}
+  .cd-attach-chip img{width:28px;height:28px;object-fit:cover;border-radius:4px;flex:none}
+  .cd-attach-chip .cd-attach-ico{width:28px;height:28px;display:grid;place-items:center;font-size:16px;border-radius:4px;background:rgba(242,234,217,.1);flex:none}
+  .cd-attach-chip .cp{font-family:var(--mono);font-size:10px;color:rgba(242,234,217,.65);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+  .cd-attach-chip .crm{background:none;border:none;color:rgba(242,234,217,.45);cursor:pointer;font-size:12px;line-height:1;padding:0 2px;flex:none;transition:color .14s}
+  .cd-attach-chip .crm:hover{color:#ff8f78}
+  .cd-attach-ins{font-family:var(--ui);font-size:10px;font-weight:600;letter-spacing:.6px;color:var(--ink);background:var(--lime);border:none;cursor:pointer;padding:6px 14px;border-radius:999px;white-space:nowrap;text-transform:uppercase;transition:filter .15s;flex:none}
+  .cd-attach-ins:hover{filter:brightness(1.06)}
+  .cd-attach-x{background:none;border:none;color:rgba(242,234,217,.5);cursor:pointer;padding:4px 8px;font-size:15px;line-height:1;transition:color .14s;flex:none}
+  .cd-attach-x:hover{color:var(--well-txt)}
+  /* "Copy text" panel — overlays the terminal with the full scrollback as selectable text. */
+  .cd-copypanel{position:absolute;inset:8px;z-index:25;display:flex;flex-direction:column;background:var(--s2);
+    border:1px solid var(--line2);border-radius:12px;box-shadow:0 18px 50px -10px rgba(29,43,31,.35);animation:rise .16s var(--ease) both}
+  .cd-copypanel[hidden]{display:none}
+  .cd-copyhead{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);flex:none}
+  .cd-copytitle{font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--green2)}
+  .cd-copyhint{font-family:var(--mono);font-size:10px;color:var(--dim);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cd-copyall{font-family:var(--ui);font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:var(--bg);background:var(--ink);
+    border:none;border-radius:999px;padding:6px 14px;cursor:pointer;transition:background .15s;flex:none}
+  .cd-copyall:hover{background:var(--green2)}
+  .cd-copyall.done{background:var(--green);color:#fff}
+  .cd-copyclose{font-family:var(--ui);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--mut);background:none;border:1px solid var(--line2);
+    border-radius:999px;padding:6px 12px;cursor:pointer;transition:color .14s,border-color .14s;flex:none}
+  .cd-copyclose:hover{color:var(--txt);border-color:var(--line3)}
+  .cd-copyarea{flex:1;width:100%;resize:none;border:none;outline:none;background:transparent;color:var(--txt);
+    font-family:var(--mono);font-size:12px;line-height:1.5;padding:12px;white-space:pre-wrap;word-break:break-word}
+  /* Right inset is generous: xterm's viewport keeps an always-on scrollbar (overflow-y:scroll)
+     and cell width is fractional with web fonts, so a tight right edge clips the LAST column
+     (= the rightmost item, e.g. "max" in /effort). The gutter guarantees the final column renders. */
+  .cd-term{position:absolute;inset:9px 18px 7px 12px}
+  .cd-term.cd-drag,.cd-composer.cd-drag{outline:2px dashed var(--green);outline-offset:-5px;border-radius:8px}
+  /* custom scrollbar (right edge, in the term's right gutter) — drives tmux copy-mode.
+     Hidden until there's history to scroll; thumb is draggable. Lives on the DARK well. */
+  .cd-scroll{position:absolute;top:8px;bottom:8px;right:4px;width:13px;border-radius:7px;background:rgba(242,234,217,.1);opacity:0;transition:opacity .2s;z-index:5}
+  .cd-scroll.show{opacity:1}
+  .cd-scroll:hover{background:rgba(242,234,217,.14)}
+  .cd-scroll-thumb{position:absolute;left:2px;right:2px;top:0;height:44px;min-height:38px;border-radius:7px;background:rgba(242,234,217,.38);cursor:grab;transition:background .15s}
+  .cd-scroll-thumb:hover{background:rgba(242,234,217,.55)}
+  .cd-scroll-thumb.grabbing{background:var(--lime);cursor:grabbing}
+  /* middle-click autoscroll: the browser-style anchor drop-point + an ns-resize cursor while active */
+  .cd-autoscroll-anchor{position:fixed;z-index:120;transform:translate(-50%,-50%);width:30px;height:30px;
+    border-radius:50%;border:1px solid rgba(242,234,217,.35);background:rgba(23,33,26,.85);
+    box-shadow:0 2px 14px rgba(0,0,0,.4);display:none;flex-direction:column;align-items:center;justify-content:center;
+    gap:2px;color:rgba(242,234,217,.7);pointer-events:none}
+  .cd-autoscroll-anchor.show{display:flex}
+  .cd-autoscroll-anchor i{font-style:normal;font-size:9px;line-height:6px}
+  body.cd-autoscrolling,body.cd-autoscrolling #cd-host,body.cd-autoscrolling .cd-term,body.cd-autoscrolling .xterm{cursor:ns-resize!important}
+  /* "jump to latest" — appears only when scrolled up; lime pops on the dark well */
+  .cd-jump{position:absolute;bottom:14px;right:24px;z-index:6;display:none;align-items:center;gap:6px;font-family:var(--ui);font-size:10px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:var(--ink);background:var(--lime);border:none;border-radius:999px;padding:7px 15px;cursor:pointer;box-shadow:0 6px 18px -6px rgba(0,0,0,.5);transition:transform .12s}
+  .cd-jump.show{display:inline-flex;animation:rise .2s var(--ease) both}
+  .cd-jump:hover{transform:translateY(-1px)}
+  /* clean right-click menu (replaces the browser's native menu inside the terminal) */
+  .cd-ctx{position:fixed;z-index:100;min-width:152px;background:var(--s2);border:1px solid var(--line2);border-radius:10px;padding:5px;box-shadow:0 14px 40px rgba(29,43,31,.25);font-family:var(--ui);font-size:12.5px}
+  .cd-ctx[hidden]{display:none}
+  .cd-ctx-item{padding:7px 12px;border-radius:7px;color:var(--txt);cursor:pointer;white-space:nowrap}
+  .cd-ctx-item:hover{background:var(--sage);color:var(--green2)}
+  .cd-ctx-item.disabled{color:var(--dim);pointer-events:none}
+  /* empty state (sits on the DARK well): a real welcome, not a shrug */
+  .cd-empty{display:flex;align-items:center;justify-content:center;height:100%;color:rgba(242,234,217,.55);font-family:var(--ui);letter-spacing:0;font-size:12px;
+    flex-direction:column;gap:11px}
+  .ce-mark{width:64px;height:64px;display:grid;place-items:center;color:var(--lime);
+    border:1px solid rgba(191,234,75,.4);border-radius:18px;background:rgba(191,234,75,.08)}
+  .ce-mark svg{width:30px;height:30px}
+  .ce-title{font-family:var(--disp);font-size:17px;font-weight:600;letter-spacing:.2px;color:var(--well-txt)}
+  .ce-sub{font-size:12px;color:rgba(242,234,217,.6);max-width:420px;text-align:center;line-height:1.7}
+  .ce-cta{display:flex;align-items:center;gap:8px;margin-top:5px;font-family:var(--ui);font-size:11px;letter-spacing:.4px;color:rgba(242,234,217,.5)}
+  .ce-cta kbd{font-family:var(--mono);font-size:10.5px;letter-spacing:0;color:var(--lime);
+    background:rgba(242,234,217,.08);border:1px solid rgba(242,234,217,.2);border-bottom-width:2px;border-radius:5px;padding:2px 8px}
+  /* new-session popover */
+  .cd-pop{display:none;position:absolute;z-index:30;top:46px;right:10px;background:var(--s2);border:1px solid var(--line2);
+    border-radius:14px;padding:13px;box-shadow:0 18px 46px rgba(29,43,31,.22);min-width:300px}
+  .cd-pop.open{display:block;animation:rise .2s var(--ease) both}
+  .cd-pop label{display:block;font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);margin:8px 0 4px}
+  .cd-pop label:first-child{margin-top:0}
+  .cd-pop select,.cd-pop input{width:100%;background:#f8f0dd;border:1px solid var(--line2);border-radius:8px;color:var(--txt);font-family:var(--ui);font-size:12.5px;padding:8px}
+  .cd-pop select:focus,.cd-pop input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(47,107,70,.12)}
+  #cd-create{background:var(--ink);border-color:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;gap:9px}
+  #cd-create:hover{background:var(--green2);color:var(--bg)}
+  #cd-create kbd{font-family:var(--mono);font-size:10px;color:var(--lime);background:rgba(0,0,0,.25);
+    border:1px solid rgba(191,234,75,.4);border-radius:4px;padding:1px 6px;text-transform:none;letter-spacing:0}
+  .cd-search{display:none;align-items:center;gap:10px;padding:8px 11px;border-top:1px solid var(--line);background:var(--s1);flex:none}
+  .cd-search.open{display:flex}
+  .cd-search input{flex:1;background:#f8f0dd;border:1px solid var(--line2);border-radius:8px;color:var(--txt);font-family:var(--mono);font-size:12px;padding:7px 9px}
+  .cd-search .hint{color:var(--dim);font-size:10.5px;font-family:var(--ui);letter-spacing:.3px}
+  /* quick-action bar */
+  .cd-quick{display:flex;flex-wrap:nowrap;gap:6px;padding:8px 11px;border-top:1px solid var(--line);flex:none;background:var(--s1);overflow-x:auto;scrollbar-width:thin}
+  .cd-qbtn{font-family:var(--ui);font-size:9.5px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;border:1px solid var(--line2);background:var(--s2);color:var(--mut);border-radius:999px;padding:5px 11px;cursor:pointer;transition:.14s;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;flex:none}
+  .cd-qbtn:hover{border-color:var(--green);color:var(--green2)}
+  .cd-qbtn.danger:hover{border-color:var(--red);color:var(--red2)}
+  .cd-qbtn .k{font-family:var(--mono);font-size:8px;color:var(--dim)}
+  /* composer */
+  .cd-composer{position:relative;flex:none;border-top:1px solid var(--line);background:var(--s2);padding:9px 11px 11px}
+  .cd-compose-tools{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+  .cd-ctool{font-family:var(--mono);font-size:13px;width:28px;height:26px;display:grid;place-items:center;border:1px solid var(--line2);background:var(--s2);color:var(--mut);border-radius:8px;cursor:pointer;transition:.14s}
+  .cd-ctool:hover{border-color:var(--green);color:var(--green2)}
+  .cd-compose-tools .cd-hint{margin-left:auto;color:var(--dim);font-size:10px;font-family:var(--ui);letter-spacing:.3px}
+  .cd-inwrap{display:flex;align-items:flex-end;gap:9px}
+  .cd-input{flex:1;resize:none;max-height:184px;min-height:42px;background:#f8f0dd;border:1px solid var(--line2);border-radius:12px;color:var(--txt);font-family:var(--mono);font-size:13px;line-height:1.5;padding:11px 13px;transition:border-color .15s,box-shadow .15s}
+  .cd-input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(47,107,70,.1)}
+  .cd-input::placeholder{color:var(--dim)}
+  .cd-send{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--ink);background:var(--ink);color:var(--bg);font-size:17px;cursor:pointer;transition:.15s;display:grid;place-items:center}
+  .cd-send:hover{background:var(--green2);border-color:var(--green2);transform:translateY(-1px)}
+  .cd-send:active{transform:translateY(0)}
+  .cd-imgchip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;color:var(--cyan2);background:rgba(30,91,255,.07);border:1px solid rgba(30,91,255,.3);border-radius:999px;padding:3px 10px;margin-bottom:6px}
+  .cd-imgchip .x{cursor:pointer;color:var(--dim)}.cd-imgchip .x:hover{color:var(--red2)}
+  /* autocomplete dropdown (slash + @file) — floats above the composer */
+  .cd-ac{display:none;position:absolute;left:11px;right:66px;bottom:calc(100% - 2px);z-index:40;background:var(--s2);border:1px solid var(--line2);border-radius:12px;box-shadow:0 -12px 40px rgba(29,43,31,.22);max-height:284px;overflow:auto;padding:6px;margin-bottom:6px}
+  .cd-ac.open{display:block;animation:rise .14s var(--ease) both}
+  .cd-aci{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:8px;cursor:pointer}
+  .cd-aci.sel,.cd-aci:hover{background:var(--sage)}
+  .cd-aci .cmd{font-family:var(--mono);font-size:12.5px;color:var(--green2);flex:none}
+  .cd-aci .ds{font-size:11px;color:var(--dim);margin-left:auto;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cd-aci .fp{font-family:var(--mono);font-size:12px;color:var(--txt);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cd-aci .ic{flex:none}
+  /* rail: changes + todos (telemetry-driven) */
+  .cd-change{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:7px;cursor:pointer;font-size:11.5px;color:var(--mut)}
+  .cd-change:hover{background:var(--s3);color:var(--txt)}
+  .cd-change .st{font-family:var(--mono);font-size:9px;font-weight:700;width:16px;flex:none;text-align:center}
+  .cd-change .st.M{color:var(--amber2)}.cd-change .st.A{color:var(--green2)}.cd-change .st.D{color:var(--red2)}.cd-change .st.untracked{color:var(--cyan2)}.cd-change .st.R{color:var(--dim)}
+  .cd-change .fp{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--mono)}
+  .cd-todo{display:flex;gap:8px;padding:4px 0;font-size:11.5px;color:var(--mut);align-items:flex-start;line-height:1.4}
+  .cd-todo .bx{flex:none;color:var(--dim)}
+  .cd-todo.completed{color:var(--dim)}.cd-todo.completed .bx{color:var(--green2)}
+  .cd-todo.in_progress{color:var(--amber2)}.cd-todo.in_progress .bx{color:var(--amber2)}
+  /* modal: diff viewer + shortcuts cheatsheet */
+  .cd-modal{display:none;position:fixed;inset:0;z-index:60;background:rgba(29,43,31,.38);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:34px}
+  .cd-modal.open{display:flex;animation:rise .2s var(--ease) both}
+  .cd-modal-card{background:var(--s2);border:1px solid var(--line2);border-radius:16px;box-shadow:0 34px 90px rgba(29,43,31,.35);max-width:1000px;width:100%;max-height:84vh;display:flex;flex-direction:column;overflow:hidden}
+  .cd-modal-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
+  .cd-modal-head h3{font-family:var(--disp);font-size:15px;letter-spacing:.2px;color:var(--txt);margin:0;font-weight:600}
+  .cd-modal-head .fp{font-family:var(--mono);font-size:12px;color:var(--green2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cd-modal-x{margin-left:auto;cursor:pointer;color:var(--dim);font-size:18px;padding:2px 9px;border-radius:7px;line-height:1}
+  button.cd-modal-x{font-family:inherit;background:none;border:0}
+  .cd-modal-x:hover{color:var(--red2);background:rgba(197,58,32,.08)}
+  .cd-modal-body{overflow:auto;padding:0}
+  .cd-diff{margin:0;font-family:var(--mono);font-size:12px;line-height:1.5}
+  .cd-diff .ln{display:block;padding:1px 16px;white-space:pre-wrap;word-break:break-word}
+  .cd-diff .add{background:rgba(47,107,70,.1);color:var(--green2)}
+  .cd-diff .del{background:rgba(197,58,32,.08);color:var(--red2)}
+  .cd-diff .meta{color:var(--violet2)}
+  .cd-diff .hunk{color:var(--cyan2);background:rgba(30,91,255,.05)}
+  .cd-keys-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px 28px;padding:18px}
+  .cd-keyrow{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--mut)}
+  .cd-keyrow kbd{font-family:var(--mono);font-size:11px;background:var(--s1);border:1px solid var(--line2);border-bottom-width:2px;border-radius:5px;padding:2px 7px;color:var(--green2);min-width:52px;text-align:center;flex:none}
+  /* telemetry rail */
+  .cd-rail .cd-railbody{flex:1;overflow-y:auto;padding:13px}
+  /* rail header tabs: Telemetry ⇄ Notes */
+  .cd-railtab{font-family:var(--ui);font-size:10px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;
+    background:none;border:none;color:var(--dim);cursor:pointer;padding:2px 3px;transition:.14s}
+  .cd-railtab:hover{color:var(--txt)}
+  .cd-railtab.active{color:var(--green2)}
+  .cd-notes-state{font-family:var(--mono);font-size:9.5px;color:var(--dim);white-space:nowrap}
+  .cd-notes{flex:1;min-height:0;width:100%;resize:none;background:transparent;border:none;outline:none;
+    color:var(--txt);font-family:var(--mono);font-size:12px;line-height:1.65;padding:11px 13px;scrollbar-width:thin;caret-color:var(--green)}
+  .cd-notes::placeholder{color:var(--dim);font-style:italic}
+  .cd-notes::selection{background:rgba(191,234,75,.5)}
+  .cd-railbody .seg{margin-bottom:16px}
+  .cd-railbody .seg:last-child{margin-bottom:0}
+  .cd-railbody .seglbl{font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:1.3px;text-transform:uppercase;color:var(--dim);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .cd-railbody .seglbl::after{content:"";flex:1;height:1px;background:var(--line)}
+  .cd-kv{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;color:var(--mut)}
+  .cd-kv b{color:var(--txt);font-weight:600;font-variant-numeric:tabular-nums}
+  .cd-mode{font-family:var(--ui);font-size:10px;font-weight:600;letter-spacing:.8px;padding:3px 10px;border-radius:999px;text-transform:uppercase}
+  .cd-mode.auto{background:rgba(169,106,28,.1);color:var(--amber2);border:1px solid rgba(169,106,28,.4)}
+  .cd-mode.plan{background:rgba(30,91,255,.07);color:var(--cyan2);border:1px solid rgba(30,91,255,.3)}
+  .cd-mode.default,.cd-mode.bypassPermissions,.cd-mode.acceptEdits{background:var(--s3);color:var(--mut);border:1px solid var(--line2)}
+  .cd-meter{height:8px;border-radius:5px;background:var(--s3);overflow:hidden;margin:7px 0 5px;display:flex}
+  .cd-meter span{height:100%;display:block;transition:width .5s var(--ease)}
+  .cd-meter .mi{background:var(--green)}.cd-meter .mc{background:var(--sage)}
+  .cd-meter-cap{display:flex;justify-content:space-between;font-size:10px;color:var(--dim);font-variant-numeric:tabular-nums}
+  .cd-chips{display:flex;flex-wrap:wrap;gap:5px}
+  .cd-chip{font-family:var(--ui);font-size:9.5px;font-weight:500;letter-spacing:.3px;padding:3px 9px;border-radius:999px;border:1px solid var(--line2);background:var(--s1);color:var(--mut)}
+  .cd-chip.sp{color:var(--amber2);border-color:rgba(169,106,28,.35);background:rgba(169,106,28,.07)}
+  .cd-chip.cx{color:var(--violet2);border-color:rgba(124,99,184,.35);background:rgba(124,99,184,.08)}
+  .cd-chip.fc{color:var(--cyan2);border-color:rgba(30,91,255,.3);background:rgba(30,91,255,.06)}
+  .cd-skill{font-size:11px;color:var(--mut);padding:3px 0;display:flex;gap:7px;align-items:center}
+  .cd-skill .b{width:5px;height:5px;border-radius:50%;background:var(--green);flex:none}
+  .cd-codex{border:1px solid rgba(124,99,184,.35);border-left:3px solid var(--violet);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:rgba(124,99,184,.06)}
+  .cd-codex .top{display:flex;align-items:center;gap:7px;font-family:var(--ui);font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--violet2)}
+  .cd-codex .mode{margin-left:auto;font-size:9px;padding:1px 7px;border-radius:999px;background:rgba(124,99,184,.14);color:var(--violet2)}
+  .cd-codex .desc{font-size:11.5px;color:var(--mut);margin-top:5px;line-height:1.4}
+  .cd-railempty{color:var(--dim);font-size:11px;font-style:italic}
+  .cd-railbody .none{color:var(--dim);font-size:11px}
+  /* rail: blocked-on-you ask card (mirrors the cyan needs-input light language) */
+  .cd-ask{border:1px solid rgba(30,91,255,.35);background:rgba(30,91,255,.06);border-radius:11px;padding:10px 11px;margin-bottom:14px}
+  .cd-ask .cd-ask-kind{font-family:var(--ui);font-size:9px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--cyan2);margin-bottom:5px}
+  .cd-ask .cd-ask-q{font-size:12px;line-height:1.45}
+  .cd-ask .cd-chips{margin-top:7px}
+  .cd-ask .cd-ask-hint{font-size:10.5px;color:var(--dim);font-style:italic;margin-top:6px}
+  /* rail: box-vitals footer — visible in both Telemetry and Notes modes */
+  .cd-vitals{flex:none;display:flex;gap:12px;flex-wrap:wrap;align-items:baseline;padding:9px 13px;border-top:1px solid var(--line)}
+  .cd-vitals .cd-vit .l{font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-right:4px}
+  .cd-vitals .cd-vit b{font-size:12px;font-variant-numeric:tabular-nums}
+  .cd-vitals .none{color:var(--dim);font-size:10.5px}
+  /* instrument well: the bar's readouts sit in one quiet cluster */
+  /* flex:0 1 auto, not flex:none — the well used to hold ~425px at every width and let the
+     session lane absorb the entire squeeze (council a6363f19). It may shrink now. */
+  .cd-well{display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;padding:4px 8px;border-radius:10px;
+    background:var(--s1);border:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+  .cd-well::-webkit-scrollbar{display:none}
+  .cd-well .cd-rt-chip{display:none;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.4px;color:var(--rt);white-space:nowrap}
+  .cd-well .cd-rt-chip .g{font-style:normal}.cd-well .cd-rt-chip .lbl{font-style:normal;text-transform:uppercase}
+  /* zoom controls must read as real buttons, even nested in the well — they stay
+     bordered so interactive controls don't look like the static readouts beside them.
+     (regression ee7f7c8e had stripped border/background, leaving them as plain glyphs.) */
+  .cd-well .cd-zoom{border:1px solid var(--line2);background:var(--s2);color:var(--txt);padding:3px 7px}
+  .cd-well .cd-zoom:hover{border-color:var(--green);color:var(--green2)}
+  .cd-well .cd-tok{border:none;padding:0}
+  .cd-model-chip{display:none;font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:.9px;text-transform:uppercase;
+    color:var(--violet2);border:1px solid rgba(124,99,184,.35);background:rgba(124,99,184,.08);border-radius:999px;padding:2px 8px;white-space:nowrap}
+  .cd-wsep{width:1px;height:14px;background:var(--line2);flex:none}
+  /* phone: the well swipes horizontally instead of amputating its last buttons at the edge */
+  @media(max-width:700px){.cd-model-chip,.cd-wsep{display:none!important}.cd-well .cd-rt-chip .lbl{display:none}
+    .cd-well{padding:2px 5px;gap:5px;background:none;border:none;min-width:0;flex:0 1 auto;overflow-x:auto;scrollbar-width:none}
+    .cd-well::-webkit-scrollbar{display:none}}
+  /* the app window (desktop >700px): bar + terminal + rail fuse into ONE window —
+     session tabs ARE the titlebar, the rail is a built-in side panel behind a hairline.
+     NO filter/transform/backdrop-filter on .cd-studio — the confirm modal and the
+     right-click menu are position:fixed children, and any of those properties would
+     re-anchor them to the window instead of the viewport. */
+  @media(min-width:701px){
+    .cd-studio{position:relative;border-radius:16px;background:var(--s2);
+      border:1px solid var(--line2);box-shadow:0 24px 60px -40px rgba(29,43,31,.4)}
+    /* bar = titlebar: flush, hairline below, radius only on top */
+    .cd-bar{margin-bottom:0;border:none;border-bottom:1px solid var(--line);border-radius:16px 16px 0 0}
+    /* content row: terminal and rail share the frame, split by a hairline */
+    .cd-stagewrap{gap:0}
+    #view-terminal #cd-host{border:none;border-radius:0 0 0 16px;box-shadow:none}
+    .cd-stagewrap .cd-rail{width:300px}
+    .cd-rail.cd-panel{border:none;border-left:1px solid var(--line);border-radius:0 0 16px 0;box-shadow:none}
+    .cd-rail .cd-phead{background:none}
+    .cd-studio.rail-off #cd-host{border-radius:0 0 16px 16px}
+    #view-terminal .cd-studio.usagebar-on #cd-host{border-radius:0}
+    .cd-studio.usagebar-on .cd-rail.cd-panel{border-radius:0}
+    #view-terminal .cd-studio.rail-off.usagebar-on #cd-host{border-radius:0}
+    .cd-usagebar{border-radius:0 0 16px 16px}
+  }
+  /* airlock (loopback lock screen): connection paths as real cards */
+  .cl-paths{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+  .cl-card{min-width:260px;max-width:340px;text-align:left;border:1px solid var(--line);border-radius:14px;padding:13px 15px;background:var(--s2)}
+  .cl-k{font-family:var(--ui);font-size:9.5px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--green2);margin-bottom:8px}
+  .cl-card code{display:block;background:var(--s1);border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+    color:var(--green2);font-size:11.5px;word-break:break-all;margin-bottom:9px}
+  .cl-copy{font-family:var(--ui);font-size:9.5px;font-weight:600;letter-spacing:1px;text-transform:uppercase;cursor:pointer;
+    color:var(--mut);background:var(--s2);border:1px solid var(--line2);border-radius:999px;padding:5px 13px;transition:.15s}
+  .cl-copy:hover{color:var(--green2);border-color:var(--green)}
+  .cl-note{color:var(--dim);font-size:11.5px}
+
+  /* honor the OS "less motion" preference for every decorative animation */
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.05ms!important}
+    .boot{display:none}
+    .led,.cb-led,.cd-bar .cd-sess.attn .cd-dot::after,
+    .cd-bar .cd-sess.needs-input .cd-dot,.cd-bar .cd-sess.needs-input .cd-dot::after{animation:none!important}
+    .cd-bar .cd-sess.waiting .cd-dot{animation:none!important}
+    .view.active .panel,.view.active .ctl-card{animation:none!important}
+  }
+  /* responsive: dense panels/tables scroll instead of overflowing on small screens; the
+     terminal bar wraps so session tabs keep usable width */
+  @media(max-width:760px){.panel{overflow-x:auto}.cd-bar{flex-wrap:wrap}}
+  /* calm mode (footer toggle) — a real LAPTOP mode. Two layers:
+     1. CSS (here): GLOBAL kill of every animation, transition, backdrop-filter, box-shadow
+        and filter — the dashboard changes styles every 2s tick, and each of those forces
+        compositing or repaint work. State colours (pills, dots, critbar) are all
+        border/background driven, so meaning survives.
+     2. JS (render()): the 2s telemetry tick renders at most every ~6s in calm — UNLESS the
+        fault fingerprint changed, which always renders immediately. Hidden-tab table/canvas
+        work is skipped everywhere (calm or not).
+     Show/hide UI built on transitions still works: with duration zeroed the end state
+     applies instantly. */
+  body.calm *,body.calm *::before,body.calm *::after{
+    animation:none!important;transition:none!important;
+    backdrop-filter:none!important;box-shadow:none!important;filter:none!important}
+  /* opaque stand-ins where blur used to keep sticky bars readable */
+  body.calm header{background:rgba(238,227,205,.98)!important}
+  body.calm nav.tabs{background:rgba(238,227,205,.98)!important}
+  body.calm .dock{background:rgba(238,227,205,.98)!important}
+  body.calm{background:var(--bg)!important}
+
+  /* one-time boot splash: a quiet cream card-flash, gone in ~1.6s.
+     html.calm-early is set in <head> BEFORE first paint so calm users never see it. */
+  .boot{position:fixed;inset:0;z-index:99998;display:grid;place-items:center;background:var(--bg);
+    animation:bootout .45s var(--ease) 1.15s both;pointer-events:none}
+  .boot .bi{display:flex;flex-direction:column;align-items:center;gap:12px;animation:bootin .5s var(--ease) both}
+  .boot .bi svg{width:44px;height:44px;color:var(--green2)}
+  .boot .bt{font-family:var(--disp);font-size:17px;font-weight:600;letter-spacing:.2px;color:var(--txt)}
+  @keyframes bootin{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+  @keyframes bootout{to{opacity:0;visibility:hidden}}
+  html.calm-early .boot,body.calm .boot{display:none}
+
+  /* station ident chip (the hostname) */
+  .host{font-family:var(--ui);letter-spacing:.8px;text-transform:uppercase;font-size:9.5px;font-weight:600;color:var(--dim);
+    border:1px solid var(--line);border-radius:999px;padding:3px 11px;background:var(--s1)}
+
+  /* numbered module chips: every panel header carries its index (causehouse numbered cards) */
+  main.view{counter-reset:mod}
+  main .panel h2{border-bottom:1px solid var(--line);padding-bottom:10px}
+  main .panel h2::before{counter-increment:mod;content:counter(mod,decimal-leading-zero);
+    font-family:var(--ui);border-radius:999px;background:var(--s1);
+    border:1px solid var(--line2);color:var(--mut);font-size:9px;letter-spacing:.8px;
+    padding:2px 8px;font-weight:600;line-height:1.5;flex:none}
+
+  /* ════════ MOBILE COCKPIT (≤700px) ═══════════════════════════════════════════
+     Phone-native layer for the PWA (Z Fold 4 cover screen & friends). Desktop is
+     untouched: every override lives behind the width gate. The sprawling desktop
+     header collapses to one slim status strip, navigation moves to a fixed bottom
+     dock in the thumb zone, cards tighten, and the two headline gauges share the
+     first screenful. The unfolded inner screen (>700px) keeps the desktop layout. */
+  .dock{display:none;position:fixed;left:0;right:0;bottom:0;z-index:40;
+    background:rgba(238,227,205,.96);
+    border-top:1px solid var(--line2);
+    padding:7px max(10px,env(safe-area-inset-left)) calc(7px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-right));
+    box-shadow:0 -8px 24px -14px rgba(29,43,31,.25)}
+  .dock button{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    background:none;border:none;border-radius:12px;padding:5px 0 4px;cursor:pointer;
+    font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:0;
+    color:var(--dim);transition:color .18s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  .dock .dk-ic{display:grid;place-items:center;width:26px;height:20px;transition:transform .18s}
+  .dock .dk-ic svg{width:19px;height:19px}
+  .dock button.active{color:var(--green2)}
+  .dock button.active .dk-ic{transform:translateY(-1px)}
+  .dock button.active::after{content:"";position:absolute;top:-8px;left:28%;right:28%;height:3px;border-radius:0 0 3px 3px;
+    background:var(--green)}
+
+  @media(max-width:700px){
+    .dock{display:flex}
+    nav.tabs{display:none}
+    /* Keep the terminal stage bounded to the VISUAL viewport on phones. The xterm's intrinsic
+       width (a wide TUI repaint) otherwise inflates the mobile layout viewport — the stage balloons
+       to ~2400px, covering the bottom dock and (with the term-tab's overflow:hidden) killing scroll,
+       so the whole cockpit reads as "frozen". Pin the view to 100vw + clip, and let the flex chain
+       shrink to it so FitAddon reflows to a sane column count instead of locking ~344 cols. */
+    #view-terminal{max-width:100vw;overflow:hidden}
+    #view-terminal #cd-studio,#view-terminal #cd-stagewrap,#view-terminal #cd-host{min-width:0;max-width:100%}
+    .cd-usagebar{flex-wrap:wrap;row-gap:4px}.cd-usagegrp{flex-wrap:wrap;row-gap:2px}
+    /* slim single-row status strip: crest + LED + wordmark … clock + net pill */
+    header{flex-wrap:nowrap;gap:9px;padding:9px 13px;overflow:hidden}
+    .tagline,.host,header .hstat{display:none}
+    header .hstat:has(#clock){display:block}
+    .wordmark{font-size:15px;white-space:nowrap}
+    .crest{width:28px;height:28px;border-radius:8px}
+    .crest svg{width:16px;height:16px}
+    .brand{gap:8px}
+    .pill{padding:4px 9px;font-size:10px;flex:none}
+    .critbar{padding:6px 13px;gap:9px;flex-wrap:nowrap}
+    .cb-title{font-size:12px;white-space:nowrap;flex:none}
+    /* One swipeable line — never balloon the bar vertically on the folded cover screen.
+       flex-wrap:nowrap is the actual fix: the base rule sets flex-wrap:wrap, so chips stacked
+       into N rows (the old white-space/text-overflow:ellipsis are inert on a flex container).
+       MUST be selected as `.critbar .cb-faults` to match the base rule's (0,2,0) specificity —
+       a bare `.cb-faults` loses to it even inside a media query (media adds no specificity).
+       min-width:0 lets the flex child shrink so overflow scrolls instead of pushing layout;
+       the right-edge mask hints "more →" without stealing a row from the gauges. */
+    .critbar .cb-faults{flex:1;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;min-width:0;
+      scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,#000 92%,transparent)}
+    .critbar .cb-faults::-webkit-scrollbar{display:none}
+    .critbar .cb-faults .fault{flex:none}
+    /* content rhythm + clearance for the fixed dock */
+    main{padding:11px 11px calc(78px + env(safe-area-inset-bottom));gap:10px}
+    footer{display:none}
+    .panel{padding:13px 12px 12px;border-radius:12px}
+    h2{font-size:13.5px;letter-spacing:.1px;margin-bottom:9px}
+    /* the tag ("20 cores") ellipsizes instead of wrapping the header to two lines */
+    h2 .tag{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42%;flex:none}
+    /* headline gauges two-up (wins over the 680px span-12 rule by source order) */
+    .col3{grid-column:span 6}
+    .gauge{width:100px;height:100px}
+    .gauge-center .v{font-size:27px;letter-spacing:-.5px}
+    .gauge-center .u{font-size:7.5px;letter-spacing:1.2px;margin-top:2px}
+    .metric .sub{font-size:10px}
+    .spark{height:34px}
+    .net-readout{font-size:22px}
+    .temps-cols{grid-template-columns:1fr}
+    .ctl-grid{grid-template-columns:1fr;gap:10px}
+    .ctl-intro{font-size:11px;line-height:1.65}
+    /* terminal tab: strip ALL top chrome — the session bar identifies the app and
+       the dock still navigates; every reclaimed row is a row of Claude */
+    body.term-tab header,body.term-tab .critbar{display:none}
+    body.term-tab{padding-bottom:calc(58px + env(safe-area-inset-bottom))}
+    /* width-gated keybar: phones always get it, even when a mouse/S Pen/DeX makes
+       the primary pointer "fine" (the pointer:coarse rule alone would hide it) */
+    body.term-tab .cd-keybar{display:flex}
+    .cd-keybar button{height:42px}
+
+    /* ── feel: keep phone GPUs on compositor-cheap chrome — flat bg, no blur,
+       no tab-switch entrance animation (it reads as lag on a phone) ── */
+    body{background:var(--bg);overscroll-behavior-y:contain;-webkit-tap-highlight-color:transparent}
+    .view.active .panel,.view.active .ctl-card{animation:none}
+    header,nav.tabs{backdrop-filter:none}
+    .dock{backdrop-filter:none;background:rgba(238,227,205,.98)}
+    .dock button:active .dk-ic{transform:scale(.86)}
+    header,.critbar,.dock,.cd-bar,.cd-keybar{-webkit-user-select:none;user-select:none}
+    /* session bar: one row, finger-sized — brand label / rail toggle / dims are
+       desktop affordances (the rail is hidden <900px anyway). + NEW collapses to a
+       glyph square and the tok pill shrinks so SESSION CHIPS get the leftover width
+       (they were being crushed to ~0 on the real cover screen). */
+    /* Was flex-wrap:nowrap with a 110px min-width on the strip, which squeezed the session list
+       into 110px at 412px — measured ZERO of 17 pills fully visible. The lane now takes its own
+       full-width row here exactly as it does at 1200px, so the strip gets the whole bar. */
+    .cd-bar{flex-wrap:wrap;gap:6px;padding:6px 7px}
+    #cd-rail-toggle,.cd-dims{display:none}
+    .cd-bar .cd-sessions{min-width:0}
+    .cd-bar .cd-sess{padding:8px 6px 8px 11px}
+    .cd-bar .cd-sess .nm{max-width:120px}
+    .cd-bar .cd-sess .cd-x{padding:6px 9px;font-size:15px;opacity:1}
+    .cd-newbtn{font-size:0;width:38px;height:38px;padding:0;display:flex;align-items:center;justify-content:center;border-radius:12px}
+    #cd-new::before{content:"＋";font-size:17px;line-height:1}
+    .cd-zoom{width:38px;height:38px;padding:0;font-size:13px;flex:none}
+    .cd-tok{font-size:9px;padding:2px 6px;max-width:104px;overflow:hidden;text-overflow:ellipsis}
+
+    /* header fit at 373px: the CLOCK label and pill were pushing ONLINE off-screen.
+       font-size:0 hides the hstat's bare "Clock" text node; the value keeps its size. */
+    header{gap:7px;padding:8px 10px}
+    .brand{gap:7px}
+    .wordmark{font-size:14px}
+    header .hstat{font-size:0;letter-spacing:0}
+    header .hstat:has(#clock) b{font-size:11.5px;display:block}
+    .pill{padding:3px 8px;font-size:9.5px;letter-spacing:.4px}
+
+    /* monitor: cards size to their content (grid equal-height stretch left big dead
+       voids in short cards next to tall ones), tighter metric internals, compact cores */
+    main{align-items:start}
+    .metric{gap:7px}
+    .metric .sub{min-height:0}
+    .spark{height:26px;margin-top:2px}
+    .mem-models .mm{padding:5px 7px}
+    .cores{grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:6px}
+    .core{height:40px;padding:4px 5px}
+    .core .val{font-size:12px}
+
+    /* controls: 2×2 button grid (the desktop flex row clipped PUSH off-screen);
+       the intro paragraph is desktop onboarding — 130px of phone scroll, gone */
+    .ctl-intro{display:none}
+    .ctl-card{padding:14px}
+    .ctl-card .states{gap:14px;margin:9px 0 12px}
+    .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .actions .fb{grid-column:1/-1;margin:2px 0 0}
+    button.act{min-height:46px}
+  }
+
+  /* soft keyboard open on the terminal (layout viewport shrinks under resizes-content):
+     hide the dock — you're typing, not navigating — and give the rows to Claude */
+  @media(max-width:700px) and (max-height:500px){
+    body.term-tab .dock{display:none}
+    body.term-tab{padding-bottom:0}
+  }
+
+  /* touch devices any width: hover is sticky after a tap, so the hover "lift"
+     leaves cards floating and replays its transition on every touch — disable */
+  @media(hover:none){
+    .panel:hover{transform:none;border-color:var(--line)}
+  }
+  .about-card{border:1px solid var(--line);border-radius:var(--r);
+    background:var(--s2);
+    padding:20px 22px;position:relative;overflow:hidden;transition:border-color .2s,transform .22s var(--ease)}
+  .about-card:hover{border-color:var(--line2);transform:translateY(-2px)}
+  .about-card::before{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(140deg,var(--card-glow,transparent),transparent 55%)}
+  /* wrap instead of clipping: the card sets overflow:hidden, so a long uptime plus a status chip
+     used to be sliced in half at the card border — losing the one line an operator reads */
+  .about-card-head{display:flex;flex-wrap:wrap;align-items:baseline;row-gap:5px;gap:10px;margin-bottom:8px}
+  .about-badge{font-family:var(--ui);font-size:9px;text-transform:uppercase;letter-spacing:1px;
+    font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid;flex:none;line-height:1.6}
+  .about-card-name{font-family:var(--disp);font-size:15px;font-weight:600;letter-spacing:.2px;color:var(--txt)}
+  .about-tagline{font-size:11px;color:var(--dim);margin:0 0 10px;line-height:1.55}
+  .about-desc{font-size:12px;color:var(--mut);line-height:1.72;margin:0 0 10px}
+  .about-desc:last-child{margin:0}
+  .about-why{border-left:2px solid var(--sage);padding:7px 0 7px 13px;margin-top:12px}
+  .about-why-lbl{font-family:var(--ui);font-size:8.5px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--dim);margin-bottom:5px}
+  .about-why p{font-size:11.5px;color:var(--mut);line-height:1.65;margin:0}
+  .about-sched{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+  .about-sched-chip{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--s1);font-size:11px}
+  .about-sched-lbl{font-family:var(--ui);font-size:8px;font-weight:600;text-transform:uppercase;letter-spacing:1.1px;color:var(--dim);flex:none}
+  .about-sched-time{color:var(--green2);font-family:var(--mono);font-variant-numeric:tabular-nums}
+  /* ---------- Claude runtime switches (Monitor) ---------- */
+  .sw-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+  .sw-item{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:11px;padding:10px 13px;background:var(--s1)}
+  .sw-txt{flex:1;min-width:0}
+  .sw-txt b{display:block;font-size:12.5px}
+  .sw-det{font-family:var(--mono);font-size:10px;color:var(--dim)}
+  button.sw{position:relative;flex:none;width:42px;height:24px;border-radius:999px;border:1px solid var(--line2);background:var(--s3);cursor:pointer;padding:0;transition:background .2s,border-color .2s}
+  button.sw .sw-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;border:1px solid var(--line2);transition:left .18s var(--ease)}
+  button.sw[aria-checked="true"]{background:var(--green);border-color:var(--green2)}
+  button.sw[aria-checked="true"] .sw-knob{left:21px;border-color:transparent}
+  button.sw[disabled]{opacity:.5;cursor:wait}
+  .cd-claude-sw{border-top:1px solid var(--line);padding:9px 13px 7px;background:var(--s1)}
+  .cd-swhead{font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:1.3px;text-transform:uppercase;color:var(--dim);margin-bottom:7px;display:flex;gap:6px;align-items:center}
+  .cd-swnote{margin-left:auto;letter-spacing:.4px;text-transform:none;font-family:var(--mono);font-size:9px}
+  .cd-swrow{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:11.5px}
+  .cd-swrow>span:first-child{font-weight:600;min-width:52px}
+  .cd-swrow .sw-det{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cd-claude-sw button.sw{width:34px;height:20px}
+  .cd-claude-sw button.sw .sw-knob{width:14px;height:14px}
+  .cd-claude-sw button.sw[aria-checked="true"] .sw-knob{left:17px}
+
+  /* ---------- standalone additions: Connect view ---------- */
+  #view-connect.active{display:block;max-width:980px;margin:0 auto;padding:18px 16px 40px}
+  .cx-intro{color:var(--mut);font-size:13.5px;line-height:1.7;max-width:760px;margin:4px 0 18px}
+  .cx-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .cx-card{background:var(--s2);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;display:flex;flex-direction:column;gap:9px}
+  .cx-card h3{font-family:var(--disp);font-size:16px;margin:0;color:var(--txt)}
+  .cx-card p{margin:0;color:var(--mut);font-size:12.5px;line-height:1.65}
+  .cx-card code{display:block;background:var(--s1);border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-family:var(--mono);font-size:12px;color:var(--txt);word-break:break-all;user-select:all}
+  .cx-card ol{margin:0;padding-left:18px;color:var(--mut);font-size:12.5px;line-height:1.7}
+  .cx-card .cx-k{font-family:var(--ui);font-size:9.5px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim)}
+  .cx-card a{color:var(--cyan2)}
+  .cx-card .cx-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .cx-btn{font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;border:1px solid var(--ink);background:var(--ink);color:var(--bg);border-radius:999px;padding:7px 14px;cursor:pointer;text-decoration:none}
+  .cx-btn.ghost{background:var(--s2);color:var(--txt);border-color:var(--line2)}
+  .cx-note{color:var(--dim);font-size:11.5px;line-height:1.6}
+  .cx-state{font-family:var(--mono);font-size:11px;color:var(--green2)}
+  .cx-state.off{color:var(--dim)}
+</style>
+</head>
+<body class="booting">
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <defs>
+    <g id="i-house-art" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4.5 20.5v-8.7L12 5.6l7.5 6.2v8.7h-5v-5.2h-5v5.2h-5Z"/>
+      <path d="M12 5.6V3.2"/><path d="M9.9 1.9a4.4 4.4 0 0 1 4.2 0"/>
+    </g>
+  </defs>
+  <symbol id="i-house" viewBox="0 0 24 24"><use href="#i-house-art"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M3 12.5h3.8l2.7-7.5 4 14 2.7-7.5H21"/></symbol>
+  <symbol id="i-controls" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 7.5h8.2M18.4 7.5H20M4 16.5h1.6M10.8 16.5H20"/><circle cx="15.4" cy="7.5" r="2.5"/><circle cx="7.8" cy="16.5" r="2.5"/></g></symbol>
+  <symbol id="i-quality" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 18.8 6v5.3c0 4.5-2.9 7.4-6.8 9-3.9-1.6-6.8-4.5-6.8-9V6L12 3.2Z"/><path d="m9.2 11.8 2.1 2.1 3.9-4.2"/></g></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m5 7.5 4.8 4.5L5 16.5"/><path d="M12.5 18.5H19"/></g></symbol>
+  <symbol id="i-apps" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="7" height="7" rx="1.8"/><rect x="13" y="4" width="7" height="7" rx="1.8"/><rect x="4" y="13" width="7" height="7" rx="1.8"/><rect x="13" y="13" width="7" height="7" rx="1.8"/></g></symbol>
+  <symbol id="i-courses" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.4C10 5 7.6 4.5 4.2 4.5v13.9c3.4 0 5.8.6 7.8 2 2-1.4 4.4-2 7.8-2V4.5C16.4 4.5 14 5 12 6.4Z"/><path d="M12 6.4v14"/></g></symbol>
+  <symbol id="i-headless" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.2 20.8V11a6.8 6.8 0 0 1 13.6 0v9.8l-2.3-1.8-2.25 1.8L12 19l-2.25 1.8-2.25-1.8-2.3 1.8Z"/><circle cx="9.6" cy="11" r=".65" fill="currentColor" stroke="none"/><circle cx="14.4" cy="11" r=".65" fill="currentColor" stroke="none"/></g></symbol>
+  <symbol id="i-council" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.2h10.2v6.8H8.4L4.8 15V5.2Z"/><path d="M19.6 9.4v9.2l-3.4-2.6h-6v-2.4"/></g></symbol>
+  <symbol id="i-arch" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.2" y="6.4" width="7.2" height="11.2" rx="1.8"/><rect x="13.6" y="6.4" width="7.2" height="11.2" rx="1.8"/><path d="M10.4 12h3.2"/><path d="M6.8 9.6h.01M17.2 9.6h.01"/></g></symbol>
+  <symbol id="i-about" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M12 11.2v4.8"/><path d="M12 8h.01"/></g></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.8" width="14" height="9.2" rx="2.2"/><path d="M8.2 10.8V8a3.8 3.8 0 0 1 7.6 0v2.8"/></g></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="m20.2 11.6-7.8 7.8a4.9 4.9 0 0 1-6.9-6.9L14 4a3.26 3.26 0 0 1 4.6 4.6l-8.4 8.4a1.63 1.63 0 0 1-2.3-2.3l7.7-7.7"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"/><path d="M3.6 12h16.8"/><path d="M12 3.6c2.3 2.3 3.5 5.1 3.5 8.4s-1.2 6.1-3.5 8.4c-2.3-2.3-3.5-5.1-3.5-8.4s1.2-6.1 3.5-8.4Z"/></g></symbol>
+  <symbol id="i-console" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="2.4"/><path d="m7.5 9.5 3 3-3 3"/><path d="M13 15.5h4"/></g></symbol>
+</svg>
+<div class="boot" id="boot" aria-hidden="true"><span class="bi"><svg><use href="#i-house"/></svg><span class="bt">Starting Scheme…</span></span></div>
+<div class="offline-banner" id="offline" role="alert" aria-live="assertive">⟳ reconnecting to the live feed…</div>
+<header>
+  <div class="brand">
+    <span class="crest" aria-hidden="true"><svg><use href="#i-house"/></svg></span>
+    <span class="led" id="led"></span>
+    <span class="wordmark">Scheme</span>
+    <span class="tagline">Remote coding cockpit</span>
+  </div>
+  <span class="host" id="host">—</span>
+  <span class="hspace"></span>
+  <div class="hstats">
+  <span class="hstat">Clock<b id="clock">—</b></span>
+  <span class="hstat">Load<b id="load">—</b></span>
+  <span class="hstat">CPU<b id="cpu">—</b></span>
+  <span class="hstat">Mem<b id="mem">—</b></span>
+  <span class="pill" id="netpill">…</span>
+  </div>
+</header>
+<div class="needbar" id="needbar" role="status" aria-live="polite" hidden></div>
+<nav class="tabs" role="tablist" aria-label="Views">
+  <button id="tab-terminal" class="active" role="tab" tabindex="0" aria-selected="true" aria-controls="view-terminal" onclick="showTab('terminal')"><svg aria-hidden="true"><use href="#i-terminal"/></svg>Terminal</button>
+  <button id="tab-connect" role="tab" tabindex="-1" aria-selected="false" aria-controls="view-connect" onclick="showTab('connect')"><svg aria-hidden="true"><use href="#i-globe"/></svg>Connect</button>
+</nav>
+<nav class="dock" aria-label="Views">
+  <button id="dock-terminal" class="active" aria-label="Terminal" aria-current="page" onclick="showTab('terminal')"><span class="dk-ic" aria-hidden="true"><svg><use href="#i-terminal"/></svg></span>Terminal</button>
+  <button id="dock-connect" aria-label="Connect" onclick="showTab('connect')"><span class="dk-ic" aria-hidden="true"><svg><use href="#i-globe"/></svg></span>Connect</button>
+</nav>
+<main class="view" id="view-terminal" role="tabpanel" aria-labelledby="tab-terminal" hidden>
+  <div class="cd-lock" id="cd-lock">
+    <div class="ico"><svg width="40" height="40" aria-hidden="true"><use href="#i-lock"/></svg></div>
+    <h3>Terminal is loopback-only</h3>
+    <p>Terminal sessions run code and edit files as <b id="lock-user">the host user</b>, so this tab only opens for connections that reach the host as loopback. Two ways in:</p>
+    <div class="cl-paths">
+      <div class="cl-card">
+        <div class="cl-k">Tailscale · any device</div>
+        <code id="connect-tailscale-url">set up tailscale serve on the host (see Connect)</code>
+        <button class="cl-copy" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.previousElementSibling.textContent).then(()=>{this.textContent='copied ✓';setTimeout(()=>this.textContent='copy',1400)})">copy</button>
+      </div>
+      <div class="cl-card">
+        <div class="cl-k">SSH tunnel</div>
+        <code id="connect-ssh-tunnel">ssh -L 3000:localhost:3000 user@host</code>
+        <button class="cl-copy" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.previousElementSibling.textContent).then(()=>{this.textContent='copied ✓';setTimeout(()=>this.textContent='copy',1400)})">copy</button>
+        <span class="cl-note">then open <b id="connect-local-url">http://localhost:3000</b></span>
+      </div>
+    </div>
+    <p class="cl-note">The Connect tab explains both paths step by step.</p>
+  </div>
+  <div class="cd-studio" id="cd-studio" style="display:none">
+    <div class="cd-bar">
+      <button class="cd-newbtn" id="cd-new" title="New session — Claude Code, Codex, a local LLM, or a plain terminal">＋ New</button>
+      <button class="cd-newbtn" id="cd-img" title="Attach image(s) — pick files, or paste (Ctrl+V) / drag a screenshot onto the terminal. Drops an @-path into Claude."><svg width="12" height="12" style="vertical-align:-1px" aria-hidden="true"><use href="#i-clip"/></svg> Image</button>
+      <input type="file" id="cd-file" accept="image/*" multiple hidden>
+      <!-- Session lane (council a6363f19). #cd-sessions stays the ONE canonical tablist; the lane
+           only adds the overflow affordances it never had. Measured before this: the well held a
+           fixed ~425px at every width while the strip was the only flex child, so 6 of 17 pills
+           were visible at 1600px, 1 at 904px and NONE at 412px — with a 0px-tall scrollbar as the
+           only hint that anything was off-screen. -->
+      <div class="cd-lane" id="cd-lane">
+        <button class="cd-lnav" id="cd-prev" type="button" aria-label="Scroll sessions left" tabindex="-1">‹</button>
+        <div class="cd-strip" id="cd-strip">
+          <div class="cd-sessions" id="cd-sessions" role="tablist" aria-label="Terminal sessions"></div>
+          <!-- Slider UNDER the names (2026-09-01): the native scrollbar is 0px tall in this flex bar, so
+               off-screen tabs had only fades/arrows/count as hints. Shown only while the strip overflows. -->
+          <div class="cd-lane-track" id="cd-lane-track" title="Drag to scroll the session tabs"><div class="cd-lane-thumb" id="cd-lane-thumb"></div></div>
+        </div>
+        <button class="cd-lnav" id="cd-next" type="button" aria-label="Scroll sessions right" tabindex="-1">›</button>
+        <button class="cd-count" id="cd-switch" type="button" aria-haspopup="dialog" aria-expanded="false"
+                title="All sessions — Alt+K (Ctrl/Cmd+K outside a shell)"><b id="cd-count-n">0</b><i id="cd-count-off"></i> ▾</button>
+      </div>
+      <button class="cd-toolsbtn" id="cd-tools" type="button" aria-expanded="false" aria-controls="cd-well"
+              title="Session tools — model, context, size, zoom, telemetry rail">⋯ Tools</button>
+      <div class="cd-well" id="cd-well">
+        <span class="cd-rt-chip" id="cd-rt" style="display:none"><i class="g"></i><i class="lbl"></i></span>
+        <span class="cd-model-chip" id="cd-model" title="model running in this session"></span>
+        <span class="cd-tok" id="cd-tok" title="context tokens this session is using"></span>
+        <span class="cd-dims" id="cd-dims" title="terminal size · columns × rows"></span>
+        <span class="cd-wsep"></span>
+        <button class="cd-zoom" id="cd-previnput" title="Jump to your previous input (❯) — click again to step further back; ‘Latest’ returns to live">⌃❯</button>
+        <button class="cd-zoom" id="cd-copytext" title="Copy text — open the full scrollback to select &amp; copy any output (even taller than the window)">⧉</button>
+        <button class="cd-zoom" id="cd-zoomout" title="Smaller text">A−</button>
+        <button class="cd-zoom" id="cd-zoomin" title="Bigger text">A+</button>
+        <button class="cd-zoom" id="cd-rail-toggle" title="Toggle the session telemetry panel">◧</button>
+      </div>
+      <!-- Switcher: a separate dialog, NOT a second tablist, and deliberately outside #cd-sessions
+           so the 2s telemetry repaint (which rebuilds that list wholesale) cannot destroy it. -->
+      <div class="cd-switcher" id="cd-switcher" role="dialog" aria-modal="true" aria-label="Switch session" hidden>
+        <div class="cd-sw-head">
+          <input id="cd-sw-q" type="search" placeholder="Search sessions…" aria-label="Search sessions" autocomplete="off">
+          <span class="cd-sw-n" id="cd-sw-n" role="status" aria-live="polite"></span>
+          <button class="cd-sw-x" id="cd-sw-close" type="button" aria-label="Close">✕</button>
+        </div>
+        <div class="cd-sw-list" id="cd-sw-list" role="listbox" aria-label="Sessions"></div>
+      </div>
+      <div class="cd-pop" id="cd-new-pop">
+        <label>Project · working directory</label>
+        <select id="cd-proj"></select>
+        <label>Label (optional)</label>
+        <input id="cd-label" placeholder="e.g. fix the login bug" maxlength="40">
+        <label style="margin-top:10px">Runtime</label>
+        <label style="display:flex;gap:8px;align-items:center;cursor:pointer;text-transform:none">
+          <input type="radio" name="cd-rt" value="claude" checked style="width:auto;margin:0"> Claude Code (cloud · Anthropic)
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer;text-transform:none">
+          <input type="radio" name="cd-rt" value="codex" style="width:auto;margin:0"> Codex (OpenAI · ChatGPT auth)
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer;text-transform:none">
+          <input type="radio" name="cd-rt" value="local" style="width:auto;margin:0"> Local LLM (Ollama via claude-local)
+        </label>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer;text-transform:none">
+          <input type="radio" name="cd-rt" value="shell" style="width:auto;margin:0"> Shell (plain terminal)
+        </label>
+        <button class="cd-btn" id="cd-create" style="margin-top:12px;width:100%"><span id="cd-create-label">Start Claude Code</span> <kbd>↵</kbd></button>
+      </div>
+    </div>
+    <div class="cd-stagewrap" id="cd-stagewrap">
+    <div class="cd-host" id="cd-host">
+      <div class="cd-empty" id="cd-empty">
+        <div class="ce-mark"><svg aria-hidden="true"><use href="#i-house"/></svg></div>
+        <div class="ce-title">No active session</div>
+        <div class="ce-sub">Start a Shell tab or one of your installed AI tools. Sessions stay on this computer when you disconnect. A reboot ends running commands; supported AI conversations can be resumed.</div>
+        <div class="ce-cta"><span>＋ New</span> <kbd>name it</kbd> <kbd>↵</kbd></div>
+      </div>
+      <div class="cd-scroll" id="cd-scroll" title="drag to scroll history"><div class="cd-scroll-thumb" id="cd-scroll-thumb"></div></div>
+      <button class="cd-jump" id="cd-jump" title="Jump to the latest output">↓ Latest</button>
+      <div class="cd-drop-overlay" id="cd-drop-overlay">
+        <span class="cd-drop-ico"><svg width="34" height="34" aria-hidden="true"><use href="#i-clip"/></svg></span>
+        <span class="cd-drop-lbl">Drop files to attach</span>
+      </div>
+      <div class="cd-attach-bar" id="cd-attach-bar">
+        <div class="cd-attach-items" id="cd-attach-items"></div>
+        <button class="cd-attach-ins" id="cd-attach-ins">↵ Insert</button>
+        <button class="cd-attach-x" id="cd-attach-x" title="Dismiss all">✕</button>
+      </div>
+      <div class="cd-copypanel" id="cd-copypanel" hidden>
+        <div class="cd-copyhead">
+          <span class="cd-copytitle">⧉ Copy text</span>
+          <span class="cd-copyhint" id="cd-copyhint">drag to select any part — or —</span>
+          <button class="cd-copyall" id="cd-copyall">Copy all</button>
+          <button class="cd-copyclose" id="cd-copyclose" title="Close (Esc)">✕ Close</button>
+        </div>
+        <textarea class="cd-copyarea" id="cd-copyarea" readonly spellcheck="false"></textarea>
+      </div>
+    </div>
+    <aside class="cd-rail cd-panel" id="cd-rail">
+      <div class="cd-phead">
+        <button class="cd-railtab active" id="cd-rail-tel" title="Live telemetry for the active session">Telemetry</button>
+        <button class="cd-railtab" id="cd-rail-notepad" title="Scratchpad — autosaves on the host, syncs across devices">Notes</button>
+        <span class="sp"></span><span class="cd-notes-state" id="cd-notes-state"></span>
+      </div>
+      <div class="cd-railbody" id="cd-railbody"><div class="cd-railempty">no active session</div></div>
+      <div class="cd-claude-sw" id="cd-claude-sw" title="Claude runtime switches — writes ~/.claude config; takes effect for NEW Claude sessions only">
+        <div class="cd-swhead">Claude Switches <span class="cd-swnote">new sessions only</span></div>
+        <div class="cd-swrow"><span>Plugins</span><span class="sw-det" id="rsw-plugins-det">—</span><button type="button" class="sw" role="switch" aria-checked="false" aria-label="Toggle plugins" id="rsw-plugins" onclick="toggleClaudeSwitch('plugins')" disabled><span class="sw-knob"></span></button></div>
+        <div class="cd-swrow"><span>Hooks</span><span class="sw-det" id="rsw-hooks-det">—</span><button type="button" class="sw" role="switch" aria-checked="false" aria-label="Toggle hooks" id="rsw-hooks" onclick="toggleClaudeSwitch('hooks')" disabled><span class="sw-knob"></span></button></div>
+        <div class="cd-swrow"><span>Skills</span><span class="sw-det" id="rsw-skills-det">—</span><button type="button" class="sw" role="switch" aria-checked="false" aria-label="Toggle skills" id="rsw-skills" onclick="toggleClaudeSwitch('skills')" disabled><span class="sw-knob"></span></button></div>
+        <div class="fb" id="rsw-fb"></div>
+      </div>
+      <textarea class="cd-notes" id="cd-notes" spellcheck="false" style="display:none"
+        placeholder="scratchpad — autosaves to the box, follows you between computers"></textarea>
+      <div class="cd-vitals" id="cd-vitals" title="Box vitals — live from the 2s feed"><span class="none">no feed yet</span></div>
+    </aside>
+    </div>
+    <div class="cd-usagebar" id="cd-usagebar" style="display:none"></div>
+    <!-- Touch key bar: the TUI keys a phone keyboard doesn't have (Esc interrupts Claude,
+         ⇧Tab cycles permission modes, arrows drive menus). Shown on coarse pointers only. -->
+    <div class="cd-keybar" id="cd-keybar">
+      <button data-k="esc" title="Escape — interrupt Claude">esc</button>
+      <button data-k="tab" title="Tab — autocomplete">tab</button>
+      <button data-k="stab" title="Shift+Tab — cycle permission mode">⇧tab</button>
+      <button data-k="up" title="Arrow up">↑</button>
+      <button data-k="down" title="Arrow down">↓</button>
+      <button data-k="left" title="Arrow left">←</button>
+      <button data-k="right" title="Arrow right">→</button>
+      <button data-k="cc" title="Ctrl+C — interrupt">^C</button>
+      <button data-act="hup" title="Scroll history up">⇞</button>
+      <button data-act="hdn" title="Scroll history down">⇟</button>
+    </div>
+    <div class="cd-ctx" id="cd-ctx" hidden>
+      <div class="cd-ctx-item" data-act="copy">Copy</div>
+      <div class="cd-ctx-item" data-act="paste">Paste</div>
+      <div class="cd-ctx-item" data-act="selall">Select all</div>
+    </div>
+    <div class="cd-modal" id="cd-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="cd-modal-title" aria-describedby="cd-modal-message">
+      <div class="cd-modal-card" style="max-width:460px">
+        <div class="cd-modal-head"><h3 class="cd-modal-title" id="cd-modal-title">Confirm</h3><button type="button" class="cd-modal-x" aria-label="Close dialog">✕</button></div>
+        <div class="cd-modal-body" style="padding:16px 18px">
+          <div class="cd-modal-msg" id="cd-modal-message" style="color:var(--mut);font-size:13px;line-height:1.6;word-break:break-word"></div>
+          <!-- field surface, not ink: --ink and --txt are the SAME colour in the cream theme
+               (both #1d2b1f), so this input used to paint typed text at 1.00:1 — invisible. -->
+          <input class="cd-modal-input" maxlength="40" style="display:none;width:100%;margin-top:12px;background:var(--s1);border:1px solid var(--line2);border-radius:6px;color:var(--txt);font-family:var(--mono);font-size:13px;padding:9px">
+          <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:16px">
+            <button class="cd-btn cd-modal-cancel">Cancel</button>
+            <button class="cd-btn cd-modal-ok">OK</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ================= COURSES ================= -->
+
+<main class="view" id="view-connect" role="tabpanel" aria-labelledby="tab-connect" hidden>
+  <p class="cx-intro">Scheme listens on this host's loopback address only. To use it from another computer or a phone you
+  bring that loopback to yourself with an SSH tunnel (same network) or with Tailscale (anywhere). Both paths land on
+  127.0.0.1, which is what the terminal plane requires. The full guide is <b>INSTALL-REMOTE.md</b> in the repository.</p>
+  <div class="cx-grid">
+    <div class="cx-card">
+      <span class="cx-k">On this host</span>
+      <h3>Local browser</h3>
+      <code id="cx-local">http://localhost:3000</code>
+      <p>Open this on the machine that runs Scheme. Everything works here without any tunnel.</p>
+    </div>
+    <div class="cx-card">
+      <span class="cx-k">Another computer · same network</span>
+      <h3>SSH tunnel</h3>
+      <p>Run this on the <em>other</em> computer, keep the window open, then open the local address it forwards.</p>
+      <code id="cx-ssh">ssh -L 3000:localhost:3000 user@host</code>
+      <p>then open <b id="cx-ssh-open">http://localhost:3000</b> on that computer.</p>
+      <div class="cx-row"><a class="cx-btn ghost" href="/connect.bat" download>Windows one-click connector (.bat)</a></div>
+      <p class="cx-note">Needs an SSH key already accepted by this host. The connector opens the tunnel and your browser in one double-click.</p>
+    </div>
+    <div class="cx-card">
+      <span class="cx-k">Anywhere · phone included</span>
+      <h3>Tailscale</h3>
+      <p>Install Tailscale on this host and on the device you connect from, then run this once on the host:</p>
+      <code id="cx-ts-serve">tailscale serve --bg --https=443 http://127.0.0.1:3000</code>
+      <p>From then on Scheme is reachable on your private tailnet at:</p>
+      <code id="cx-ts-url">not detected yet — install Tailscale on the host and run the command above</code>
+      <p class="cx-state off" id="cx-ts-state">tailscale: not detected on the host</p>
+      <p class="cx-note">Never use <code style="display:inline;padding:1px 5px">tailscale funnel</code>: that exposes the port to the public internet, and Scheme refuses to serve the terminal while it detects a Funnel.</p>
+    </div>
+    <div class="cx-card">
+      <span class="cx-k">Sanity check</span>
+      <h3>Is the terminal unlocked?</h3>
+      <p>The Terminal tab shows a lock card when your connection is not loopback. Over a tunnel or Tailscale it shows the session bar instead.</p>
+      <ol>
+        <li>Open the Terminal tab.</li>
+        <li>Press <b>＋ New</b>, pick a runtime, press <b>Start</b>.</li>
+        <li>A session tab appears and the agent boots inside it. Close the browser — the session keeps running.</li>
+      </ol>
+    </div>
+  </div>
+</main>
+
+<div class="toast-wrap" id="toast-wrap"></div>
+<footer>Scheme · self-hosted · sessions live in tmux on the host</footer>
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
+<script src="/vendor/addon-search.js"></script>
+<script src="/vendor/terminal-ui.js?v=standalone1"></script>
+<script>
+'use strict';
+const $=(id)=>document.getElementById(id);
+const ESC={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>ESC[c]);}
+let activeView='terminal', lastData=null, lastMsg=Date.now();
+const VIEWS=['terminal','connect'];
+
+// ---- tabs ----
+function showTab(t){
+  activeView=t;
+  document.body.classList.toggle('term-tab', t==='terminal');   // the body becomes a full-height flex column on the terminal tab
+  for(const k of VIEWS){
+    const sel=t===k;
+    $('tab-'+k).classList.toggle('active', sel);
+    $('tab-'+k).setAttribute('aria-selected', sel?'true':'false');
+    $('tab-'+k).tabIndex=sel?0:-1;
+    $('view-'+k).classList.toggle('active', sel);
+    $('view-'+k).hidden=!sel;
+    const dk=$('dock-'+k); if(dk){dk.classList.toggle('active', sel);if(sel)dk.setAttribute('aria-current','page');else dk.removeAttribute('aria-current');}
+  }
+  if(t==='terminal'){
+    loadConnectInfo(true);   // re-resolve on every activation — a tunnel/tailscale set up mid-session must not need a reload
+    if(window.CommandDeckTerminal) window.CommandDeckTerminal.activate();
+  }
+  if(t==='connect') loadConnectInfo(true);
+}
+document.querySelector('.tabs').addEventListener('keydown',(e)=>{
+  if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;
+  const tabs=[...document.querySelectorAll('.tabs [role="tab"]')];let i=tabs.indexOf(e.target);if(i<0)return;
+  e.preventDefault();i=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+  const next=tabs[i];showTab(next.id.replace(/^tab-/,''));next.focus();
+});
+
+// ---- connect info (lock card + Connect view + home prefix for ~ shortening) ----
+let _connectInfoLoaded=false;
+function applyConnectInfo(j){
+  const port=j.port||3000, local='http://localhost:'+port;
+  const ssh=(j.commands&&j.commands.sshTunnel)||('ssh -L '+port+':localhost:'+port+' '+(j.sshUser||'user')+'@host');
+  const tsUrl=j.urls&&j.urls.tailscaleDns;
+  if(j.home) document.documentElement.dataset.home=j.home;
+  if($('lock-user')&&j.sshUser)$('lock-user').textContent=j.sshUser;
+  if($('connect-tailscale-url'))$('connect-tailscale-url').textContent=tsUrl||'set up tailscale serve on the host (see Connect)';
+  if($('connect-ssh-tunnel'))$('connect-ssh-tunnel').textContent=ssh;
+  if($('connect-local-url'))$('connect-local-url').textContent=local;
+  if($('cx-local'))$('cx-local').textContent=local;
+  if($('cx-ssh'))$('cx-ssh').textContent=ssh;
+  if($('cx-ssh-open'))$('cx-ssh-open').textContent=local;
+  if($('cx-ts-serve'))$('cx-ts-serve').textContent=(j.commands&&j.commands.tailscaleServe)||('tailscale serve --bg --https=443 http://127.0.0.1:'+port);
+  if($('cx-ts-url'))$('cx-ts-url').textContent=tsUrl||'not detected yet — install Tailscale on the host and run the command above';
+  const st=$('cx-ts-state'); if(st){ st.textContent=tsUrl?('tailscale: '+(j.tailscaleDns||'')+' · '+(j.tailscaleIp||'')):(j.tailscaleIp?'tailscale: up ('+j.tailscaleIp+') — serve not detected yet':'tailscale: not detected on the host'); st.classList.toggle('off',!tsUrl); }
+  if($('host')&&j.host)$('host').textContent=j.host;
+}
+async function loadConnectInfo(force){
+  if(_connectInfoLoaded&&!force)return;
+  _connectInfoLoaded=true;
+  try{ const r=await fetch('/api/connect-info'); if(!r.ok)return; applyConnectInfo(await r.json()); }catch{}
+}
+
+// ---- Claude runtime switches (rail) — GET state / POST one switch at a time; new sessions only ----
+const SW_NAMES=['plugins','hooks','skills'];
+function paintClaudeSwitches(toggles){
+  for(const n of SW_NAMES){
+    const t=toggles&&toggles[n], b=$('rsw-'+n), det=$('rsw-'+n+'-det'); if(!b)continue;
+    b.disabled=!t;
+    if(t){b.setAttribute('aria-checked',t.on?'true':'false');if(det)det.textContent=t.detail||'';}
+    else if(det)det.textContent='unavailable';
+  }
+}
+function swFeedback(cls,msg){const fb=$('rsw-fb');if(fb){fb.className='fb '+cls;fb.textContent=msg;}}
+async function loadClaudeToggles(){
+  try{
+    const r=await fetch('/api/claude-toggles');const j=await r.json();
+    if(!r.ok||!j.ok)throw new Error((j&&j.error)||('HTTP '+r.status));
+    paintClaudeSwitches(j.toggles);
+  }catch(e){swFeedback('bad','switches unavailable: '+e.message);}
+}
+async function toggleClaudeSwitch(name){
+  const b=$('rsw-'+name);if(!b||b.disabled)return;
+  const want=b.getAttribute('aria-checked')!=='true';
+  SW_NAMES.forEach(n=>{const x=$('rsw-'+n);if(x)x.disabled=true;});
+  swFeedback('working',(want?'enabling':'disabling')+' '+name+'…');
+  try{
+    const r=await fetch('/api/claude-toggles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,on:want})});
+    const j=await r.json();
+    if(!r.ok||!j.ok)throw new Error((j&&j.error)||('HTTP '+r.status));
+    paintClaudeSwitches(j.toggles);
+    swFeedback('ok',name+' '+(want?'ON':'OFF')+' ✓ — applies to new Claude sessions'+(j.warnings&&j.warnings.length?' · '+j.warnings.join(' · '):''));
+  }catch(e){ swFeedback('bad',name+' failed: '+e.message); loadClaudeToggles(); }
+  setTimeout(()=>{const fb=$('rsw-fb');if(fb&&fb.classList.contains('ok'))fb.textContent='';},9000);
+}
+
+// ---- toasts: message toasts + click-to-open cards for links an agent tried to open ----
+function showToast(msg){
+  const wrap=$('toast-wrap'); if(!wrap)return;
+  const t=document.createElement('div'); t.className='toast'; t.dataset.msgToast='1'; t.textContent=String(msg||'');
+  wrap.appendChild(t); setTimeout(()=>{ try{ t.remove(); }catch(e){} },6000);
+}
+const shownToasts=new Set(), dismissedToasts=new Set();
+function ackOpenUrl(id){ fetch('/api/openurl/ack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}).catch(()=>{}); }
+function renderOpenUrls(list){
+  const wrap=$('toast-wrap'); if(!wrap)return;
+  const ids=new Set((list||[]).map(o=>o.id));
+  [...wrap.children].forEach(el=>{ if(!el.dataset.msgToast&&!ids.has(el.dataset.id)){ shownToasts.delete(el.dataset.id); el.remove(); } });
+  for(const id of dismissedToasts) if(!ids.has(id)) dismissedToasts.delete(id);
+  (list||[]).forEach(o=>{
+    if(shownToasts.has(o.id)||dismissedToasts.has(o.id))return; shownToasts.add(o.id);
+    const card=document.createElement('div'); card.className='toast'; card.dataset.id=o.id;
+    card.innerHTML='<div class="tt">🔗 A link opened — view it on THIS device?</div><div class="tu"></div><div class="tb"><button class="dismiss">Dismiss</button><button class="go">Open ↗</button></div>';
+    card.querySelector('.tu').textContent=o.url;
+    card.querySelector('.go').onclick=()=>{ window.open(o.url,'_blank','noopener,noreferrer'); ackOpenUrl(o.id); dismissedToasts.add(o.id); shownToasts.delete(o.id); card.remove(); };
+    card.querySelector('.dismiss').onclick=()=>{ ackOpenUrl(o.id); dismissedToasts.add(o.id); shownToasts.delete(o.id); card.remove(); };
+    wrap.appendChild(card);
+  });
+}
+
+// ---- "needs your input": title badge, favicon swap and the answer bar (any tab) ----
+const BASE_TITLE=document.title;
+let attnCount=-1, _needSig='';
+function applyAttention(map){
+  const m=(map&&typeof map==='object')?map:{};
+  const ids=Object.keys(m), n=ids.length;
+  if(n!==attnCount){
+    attnCount=n;
+    document.title=n>0?'('+n+') ● '+BASE_TITLE:BASE_TITLE;
+    const link=document.querySelector('link[rel="icon"]');
+    if(link)link.setAttribute('href',n>0?'/icon-alert.svg':'/icon.svg');
+  }
+  const sig=ids.map(id=>id+':'+m[id]).sort().join('|');
+  if(sig!==_needSig){_needSig=sig;renderNeedbar(m);}
+}
+function renderNeedbar(m){
+  const nb=$('needbar');if(!nb)return;
+  const ids=Object.keys(m||{});
+  if(!ids.length){nb.hidden=true;nb.innerHTML='';return;}
+  const carry=new Map();
+  nb.querySelectorAll('.need-input').forEach(i=>{if(i.value)carry.set(i.dataset.id,i.value);});
+  const act=document.activeElement;
+  const focusId=(act&&act.classList&&act.classList.contains('need-input'))?act.dataset.id:null;
+  const selStart=focusId?act.selectionStart:null,selEnd=focusId?act.selectionEnd:null;
+  nb.hidden=false;
+  nb.innerHTML=ids.map(id=>{
+    const kind=m[id]==='plan'?'approve or revise the plan':'pick an option or answer';
+    const sid=esc(id);
+    return '<div class="need-row" data-id="'+sid+'"><span class="need-msg">⚠ An agent is waiting — '+kind+'</span>'+
+      '<input class="need-input" data-id="'+sid+'" placeholder="type your answer, then Send / Enter" autocomplete="off" spellcheck="false">'+
+      '<button class="need-send" type="button" data-id="'+sid+'">Send</button></div>';
+  }).join('');
+  nb.querySelectorAll('.need-send').forEach(b=>{
+    const row=b.closest('.need-row'),input=row.querySelector('.need-input');
+    b.addEventListener('click',()=>sendResponse(b.dataset.id,input,b));
+    input.addEventListener('keydown',ev=>{if(ev.key==='Enter')sendResponse(b.dataset.id,input,b);});
+  });
+  nb.querySelectorAll('.need-input').forEach(i=>{const v=carry.get(i.dataset.id);if(v!=null)i.value=v;});
+  if(focusId){ const again=nb.querySelector('.need-input[data-id="'+CSS.escape(focusId)+'"]'); if(again){again.focus();try{again.setSelectionRange(selStart,selEnd);}catch(_){}} }
+}
+async function sendResponse(id,input,btn){
+  const text=((input&&input.value)||'').trim();
+  if(!text){if(input)input.focus();return;}
+  if(btn){btn.disabled=true;btn.textContent='sending…';}
+  try{
+    const r=await fetch('/api/term/respond',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,text})});
+    const j=await r.json();
+    if(j&&j.ok){if(input)input.value='';if(btn)btn.textContent='sent ✓';}
+    else if(btn)btn.textContent='⚠ '+((j&&j.error)||'failed');
+  }catch(e){if(btn)btn.textContent='⚠ error';}
+  setTimeout(()=>{if(btn){btn.disabled=false;btn.textContent='Send';}},2500);
+}
+
+// ---- live feed: header stats every 2s + per-session lights into the cockpit ----
+function setOffline(on){const b=$('offline');if(b)b.classList.toggle('show',!!on);}
+function render(p){
+  lastData=p;
+  if(p.host)$('host').textContent=p.host;
+  $('clock').textContent=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  $('load').textContent=Array.isArray(p.load)&&p.load.length?p.load[0].toFixed(2):'—';
+  $('cpu').textContent=p.cpu&&p.cpu.overall!=null?Math.round(p.cpu.overall)+'%':'—';
+  $('mem').textContent=p.mem&&p.mem.total?Math.round(p.mem.used/p.mem.total*100)+'%':'—';
+  const pill=$('netpill'); pill.textContent='LIVE'; pill.className='pill ok';
+  try{window.CommandDeckTerminal&&window.CommandDeckTerminal.vitals&&window.CommandDeckTerminal.vitals(p);}catch(_){}
+  renderOpenUrls(p.openUrls);
+}
+function connect(){
+  const es=new EventSource('/events');
+  es.onopen=()=>{lastMsg=Date.now();setOffline(false);};
+  es.onmessage=(e)=>{lastMsg=Date.now();setOffline(false);
+    try{const d=JSON.parse(e.data); if(d.hb&&!d.ts) return; applyAttention(d.termAttention); if(Object.hasOwn(d,'termLights')&&window.CommandDeckTerminal&&window.CommandDeckTerminal.lights)window.CommandDeckTerminal.lights(d.termLights); render(d);}catch(err){console.error(err);}};
+  es.onerror=()=>{setOffline(true); if(es.readyState===EventSource.CLOSED){try{es.close();}catch(_){} setTimeout(connect,1500);}};
+}
+connect();
+setInterval(()=>{if(Date.now()-lastMsg>10000)setOffline(true);},2000);
+
+// ---- file drag-and-drop onto the terminal → upload → @path chips ----
+{
+  const host=$('cd-host'),overlay=$('cd-drop-overlay'),bar=$('cd-attach-bar');
+  const items=$('cd-attach-items'),insBtn=$('cd-attach-ins'),xBtn=$('cd-attach-x');
+  const pending=new Map();let uid=0;
+  const hasFiles=dt=>dt&&[...dt.types].includes('Files');
+  const fileGlyph=name=>{const e=(name.split('.').pop()||'').toLowerCase();
+    if(e==='pdf')return '📕';
+    if(['xls','xlsx','csv','tsv','ods','numbers'].includes(e))return '📊';
+    if(['doc','docx','odt','rtf','pages'].includes(e))return '📝';
+    if(['ppt','pptx','key','odp'].includes(e))return '📽️';
+    if(['sql','db','sqlite','sqlite3'].includes(e))return '🗃️';
+    if(['zip','tar','gz','tgz','7z','rar'].includes(e))return '🗜️';
+    if(['json','yaml','yml','xml','toml','ini','csv'].includes(e))return '⚙️';
+    if(['js','ts','py','go','rs','sh','c','cpp','java','rb','php','html','css'].includes(e))return '💻';
+    return '📄';};
+  const syncBar=()=>{ const activeSess=window.CommandDeckTerminal&&window.CommandDeckTerminal.activeSessionId();
+    for(const chip of items.children)chip.style.display=chip.dataset.sess===activeSess?'':'none';
+    const any=[...pending.values()].some(e=>e.sess===activeSess);bar.classList.toggle('show',any);if(!pending.size)items.innerHTML=''; };
+  function addChip(id,dataUrl,rel){
+    const d=document.createElement('div');d.className='cd-attach-chip';d.dataset.uid=id;
+    d.dataset.sess=(pending.get(id)||{}).sess||'';
+    const fname=rel.split('/').pop();
+    const thumb=(typeof dataUrl==='string'&&dataUrl.startsWith('data:image/'))?`<img src="${esc(dataUrl)}" alt="">`:`<span class="cd-attach-ico">${fileGlyph(fname)}</span>`;
+    d.innerHTML=`${thumb}<span class="cp" title="${esc(rel)}">${esc(fname)}</span><button class="crm" title="Remove">✕</button>`;
+    d.querySelector('.crm').onclick=()=>{ pending.delete(id);d.remove();syncBar(); };
+    items.appendChild(d);
+  }
+  const toDataUrl=f=>new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(f);});
+  if(host&&overlay&&bar){
+    host.addEventListener('dragenter',e=>{if(hasFiles(e.dataTransfer)){e.preventDefault();overlay.classList.add('active');}});
+    host.addEventListener('dragover', e=>{if(hasFiles(e.dataTransfer)){e.preventDefault();overlay.classList.add('active');}});
+    host.addEventListener('dragleave',e=>{if(!host.contains(e.relatedTarget))overlay.classList.remove('active');});
+    host.addEventListener('drop',async e=>{
+      e.preventDefault();overlay.classList.remove('active');
+      const files=[...e.dataTransfer.files]; if(!files.length)return;
+      const sessId=window.CommandDeckTerminal&&window.CommandDeckTerminal.activeSessionId();
+      if(!sessId){showToast('No active terminal session — start one first');return;}
+      await Promise.all(files.map(async file=>{
+        const id=++uid;
+        try{
+          const dataUrl=await toDataUrl(file);
+          const r=await fetch('/api/term/upload',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:sessId,name:file.name,data:dataUrl})});
+          const j=await r.json();
+          if(!j.ok){showToast(file.name+': '+(j.error||'upload failed'));return;}
+          pending.set(id,{rel:j.rel,sess:sessId}); addChip(id,dataUrl,j.rel); syncBar();
+        }catch(err){showToast(file.name+': '+err.message);}
+      }));
+    });
+    const activeEntries=()=>{ const activeSess=window.CommandDeckTerminal&&window.CommandDeckTerminal.activeSessionId(); return [...pending.entries()].filter(([,e])=>e.sess===activeSess); };
+    const dropEntries=entries=>{ for(const [id] of entries){pending.delete(id);const chip=items.querySelector(`[data-uid="${id}"]`);if(chip)chip.remove();} };
+    insBtn.addEventListener('click',()=>{ if(!window.CommandDeckTerminal)return; const entries=activeEntries();if(!entries.length)return; window.CommandDeckTerminal.injectText(entries.map(([,e])=>'@'+e.rel).join(' ')+' '); dropEntries(entries);syncBar(); });
+    xBtn.addEventListener('click',()=>{dropEntries(activeEntries());syncBar();});
+    window.CommandDeckAttach={ sync: syncBar, dropSession: sess=>{ dropEntries([...pending.entries()].filter(([,e])=>e.sess===sess));syncBar(); } };
+  }
+}
+
+// ---- boot ----
+showTab('terminal');
+loadClaudeToggles();
+setTimeout(()=>{const b=$('boot');if(b)b.remove();},1900);
+setTimeout(()=>document.body.classList.remove('booting'),1200);
+</script>
+</body>
+</html>

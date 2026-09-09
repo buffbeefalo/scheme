@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Command Deck app icon, ATTENTION variant: a session is blocked waiting on you.
+       Same house as icon.svg + a ringed BLUE badge top-right (blue = needs-input in
+       the causehouse-light palette) so a backgrounded browser tab reads "needs input"
+       at favicon size. -->
+  <rect width="512" height="512" rx="100" fill="#eee3cd"/>
+  <g fill="none" stroke="#1d2b1f" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M136 396V244l120-100 120 100v152h-82v-84h-76v84h-82Z" fill="#b9d9c4"/>
+    <path d="M256 144v-38"/>
+    <path d="M215 82a72 72 0 0 1 82 0"/>
+  </g>
+  <circle cx="398" cy="114" r="92" fill="#eee3cd"/>
+  <circle cx="398" cy="114" r="62" fill="#1e5bff"/>
+</svg>

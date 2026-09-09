@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# scheme-doctor — say what is installed on this machine and which Scheme lanes will work.
+# Read-only: it changes nothing. Run it before `bin/scheme` and after any install step.
+set -u
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ok=0; bad=0
+pass() { printf '  \033[32m✔\033[0m %-14s %s\n' "$1" "$2"; ok=$((ok+1)); }
+fail() { printf '  \033[31m✘\033[0m %-14s %s\n' "$1" "$2"; bad=$((bad+1)); }
+warn() { printf '  \033[33m•\033[0m %-14s %s\n' "$1" "$2"; }
+find_bin() { local name="$1"; shift; local c; c="$(command -v "$name" 2>/dev/null || true)"; [ -n "$c" ] && { printf '%s' "$c"; return; }; for c in "$@"; do [ -x "$c" ] && { printf '%s' "$c"; return; }; done; printf ''; }
+
+echo "Scheme doctor — $(hostname) ($(uname -s) $(uname -m))"
+echo
+echo "Required on the host:"
+if command -v node >/dev/null 2>&1; then
+  v="$(node -v)"; major="${v#v}"; major="${major%%.*}"
+  if [ "$major" -ge 22 ]; then pass "node" "$v ($(command -v node))"; else fail "node" "$v — Node 22 or newer is required"; fi
+else fail "node" "not installed — https://nodejs.org (22 or newer)"; fi
+if command -v tmux >/dev/null 2>&1; then pass "tmux" "$(tmux -V) ($(command -v tmux))"; else fail "tmux" "not installed — apt install tmux / brew install tmux"; fi
+if command -v script >/dev/null 2>&1; then pass "script" "$(command -v script) (supplies the terminal PTY)"; else fail "script" "not installed — part of util-linux (Linux) or the base system (macOS)"; fi
+if command -v git >/dev/null 2>&1; then pass "git" "$(git --version | cut -d' ' -f3)"; else warn "git" "not installed — the Changes panel in the session rail stays empty"; fi
+case "$(uname -s)" in
+  Linux) pass "platform" "Linux — fully supported" ;;
+  Darwin) warn "platform" "macOS — expected to work (BSD script), not yet verified by the maintainer" ;;
+  MINGW*|MSYS*|CYGWIN*) fail "platform" "native Windows is not supported as a HOST — install Scheme inside WSL2 (see INSTALL-HOST.md)" ;;
+  *) warn "platform" "$(uname -s) — untested" ;;
+esac
+echo
+echo "Lanes (each is optional — install an agent before starting its lane):"
+CLAUDE_BIN="${COMMAND_DECK_CLAUDE:-$(find_bin claude "$HOME/.local/bin/claude" "$HOME/.claude/local/claude" "$HOME/.npm-global/bin/claude" /usr/local/bin/claude /opt/homebrew/bin/claude)}"
+if [ -n "$CLAUDE_BIN" ]; then pass "Claude Code" "$CLAUDE_BIN ($("$CLAUDE_BIN" --version 2>/dev/null | head -1 || echo 'version unknown'))"; else warn "Claude Code" "not found — https://docs.claude.com/en/docs/claude-code (or set COMMAND_DECK_CLAUDE)"; fi
+CODEX_BIN="${COMMAND_DECK_CODEX:-$(find_bin codex "$HOME/.local/bin/codex" "$HOME/.npm-global/bin/codex" /usr/local/bin/codex /opt/homebrew/bin/codex)}"
+if [ -n "$CODEX_BIN" ]; then pass "Codex" "$CODEX_BIN ($("$CODEX_BIN" --version 2>/dev/null | head -1 || echo 'version unknown'))"; else warn "Codex" "not found — npm i -g @openai/codex (or set COMMAND_DECK_CODEX)"; fi
+BASE="${CLAUDE_LOCAL_BASE:-http://localhost:11434}"
+MODEL="${CLAUDE_LOCAL_MODEL:-qwen3-coder:30b}"
+if command -v curl >/dev/null 2>&1 && ver="$(curl -sf --max-time 2 "$BASE/api/version" 2>/dev/null)"; then
+  if curl -sf --max-time 5 "$BASE/api/show" -d "{\"model\":\"$MODEL\"}" >/dev/null 2>&1; then
+    pass "Local LLM" "Ollama $(printf '%s' "$ver" | sed 's/.*"version":"\([^"]*\)".*/\1/') at $BASE, model $MODEL present"
+  else
+    warn "Local LLM" "Ollama at $BASE is up but model '$MODEL' is not pulled — run: ollama pull $MODEL (or set CLAUDE_LOCAL_MODEL)"
+  fi
+  [ -n "$CLAUDE_BIN" ] || warn "Local LLM" "the local lane also needs Claude Code installed (it drives the local model)"
+else
+  warn "Local LLM" "Ollama not reachable at $BASE — install from https://ollama.com and pull a model, or set CLAUDE_LOCAL_BASE"
+fi
+pass "Shell" "$(basename "${SHELL:-sh}")"
+echo
+echo "Remote access:"
+if command -v tailscale >/dev/null 2>&1; then
+  ip="$(tailscale ip -4 2>/dev/null | head -1)"
+  if [ -n "$ip" ]; then pass "tailscale" "up, $ip — INSTALL-REMOTE.md §Tailscale"; else warn "tailscale" "installed but not connected (tailscale up)"; fi
+  if tailscale serve status 2>/dev/null | grep -q .; then warn "tailscale" "serve is configured: $(tailscale serve status 2>/dev/null | head -1)"; fi
+  # Same rule as the server's guard: any AllowFunnel entry set to true in the serve config = public exposure.
+  if tailscale serve status --json 2>/dev/null | tr -d ' \n' | grep -q '"AllowFunnel":{[^}]*:true'; then fail "tailscale" "FUNNEL is on — Scheme refuses the terminal while its port is public; run: tailscale funnel off"; fi
+else
+  warn "tailscale" "not installed — phone/anywhere access needs it; same-network access works over SSH without it"
+fi
+if command -v sshd >/dev/null 2>&1 || [ -x /usr/sbin/sshd ]; then pass "ssh server" "present — same-network access via SSH tunnel is possible"; else warn "ssh server" "no sshd found — the SSH-tunnel path needs one (apt install openssh-server)"; fi
+echo
+if [ "$bad" -eq 0 ]; then echo "Ready: $ok checks passed. Start with: bin/scheme"; else echo "$bad blocking problem(s) above — fix them, then rerun bin/scheme-doctor"; exit 1; fi

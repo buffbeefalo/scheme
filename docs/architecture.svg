@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 280" role="img" aria-labelledby="title description">
+  <title id="title">Scheme: your working computer, from any screen</title>
+  <desc id="description">A browser on a phone or desktop connects through a private Tailscale connection or SSH tunnel to Scheme on your working computer. Project files and optional coding tools stay on the working computer.</desc>
+  <rect width="1000" height="280" rx="24" fill="#f5f1e8"/>
+  <g font-family="system-ui, sans-serif" fill="#253b33">
+    <text x="40" y="45" font-size="12" font-weight="700" letter-spacing="2">ONE WORKING COMPUTER. MORE WAYS TO REACH IT.</text>
+    <rect x="40" y="78" width="236" height="160" rx="16" fill="#ffffff" stroke="#d0d8ce"/>
+    <rect x="62" y="99" width="70" height="49" rx="5" fill="#e6ede3" stroke="#536c5b" stroke-width="2"/>
+    <path d="M97 148v10m-17 0h34" fill="none" stroke="#536c5b" stroke-width="2"/>
+    <rect x="154" y="97" width="31" height="60" rx="6" fill="#e6ede3" stroke="#536c5b" stroke-width="2"/>
+    <path d="M165 150h9" stroke="#536c5b" stroke-width="2"/>
+    <text x="62" y="191" font-size="18" font-weight="650">Your viewing device</text>
+    <text x="62" y="215" font-size="12.5" fill="#5c6d61">Phone, tablet, laptop, desktop</text>
+    <path d="M290 154h166m-8-7 8 7-8 7m-150-14-8 7 8 7" fill="none" stroke="#657c68" stroke-width="2"/>
+    <text x="373" y="124" text-anchor="middle" font-size="15" font-weight="650">Private connection</text>
+    <text x="373" y="187" text-anchor="middle" font-size="13" fill="#5c6d61">Tailscale or SSH</text>
+    <rect x="472" y="78" width="488" height="160" rx="16" fill="#253b33"/>
+    <text x="498" y="115" font-size="22" font-weight="650" fill="#fffdf6">Your working computer</text>
+    <text x="498" y="140" font-size="14" fill="#d9e4d8">Runs Scheme and keeps your projects here</text>
+    <rect x="498" y="163" width="436" height="48" rx="8" fill="#3c5447"/>
+    <text x="716" y="193" text-anchor="middle" font-size="15" fill="#f2f5e9">Shell · Claude Code · Codex · Local model</text>
+  </g>
+</svg>

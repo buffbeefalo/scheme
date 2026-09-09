@@ -1,0 +1,30 @@
+# Proof that a stranger can run this: fresh Ubuntu runner, Node 22, tmux — no npm install, no secrets.
+name: tests
+permissions:
+  contents: read
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 9 * * 1'
+jobs:
+  node:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Install tmux (the terminal backend)
+        run: sudo apt-get update && sudo apt-get install -y tmux
+      - name: Doctor (informational)
+        run: bin/scheme-doctor || true
+      - name: Check release files and local guide links
+        run: npm run check:release
+      - name: Test
+        # npm test skips one Codex-telemetry case whose rollout fixture the public tree does not ship (see PUBLISHING.md).
+        run: npm test

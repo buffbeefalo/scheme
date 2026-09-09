@@ -9,7 +9,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const { randomBytes } = require('node:crypto');
 const { spawn, spawnSync } = require('node:child_process');
+const { decodeFrame, OPCODES } = require('../lib/wsframe');
 
 const project = path.resolve(__dirname, '..');
 
@@ -96,6 +98,145 @@ function cleanup({ home, socket }) {
   spawnSync('tmux', ['-L', socket, 'kill-server'], { stdio: 'ignore' });
   fs.rmSync(home, { recursive: true, force: true });
 }
+
+const hasTmux = spawnSync('tmux', ['-V'], { stdio: 'ignore' }).status === 0;
+const hasScript = spawnSync('which', ['script'], { stdio: 'ignore' }).status === 0;
+const hasGit = spawnSync('git', ['--version'], { stdio: 'ignore' }).status === 0;
+
+async function createShell(port, cwd) {
+  const response = await request(port, 'POST', '/api/term/sessions', {
+    body: { label: 'Locale shell', cwd, shell: true }, headers: sameOrigin(port),
+  });
+  assert.equal(response.status, 200, response.body);
+  const result = JSON.parse(response.body);
+  assert.equal(result.ok, true, response.body);
+  return result.session;
+}
+
+function terminalRoundTrip(port, id) {
+  return new Promise((resolve, reject) => {
+    let socket, buf = Buffer.alloc(0), output = '', sent = false, settled = false;
+    const req = http.request({ host: '127.0.0.1', port, path: `/api/term/attach?id=${encodeURIComponent(id)}`, headers: {
+      Host: `127.0.0.1:${port}`, ...sameOrigin(port), Connection: 'Upgrade', Upgrade: 'websocket',
+      'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': randomBytes(16).toString('base64'),
+    } });
+    const finish = (err) => {
+      if (settled) return;
+      settled = true; clearTimeout(timer); socket?.destroy(); req.destroy();
+      if (err) reject(new Error(`${err.message}: ${JSON.stringify(output)}`)); else resolve(output);
+    };
+    const timer = setTimeout(() => finish(new Error('terminal round trip timed out')), 8000);
+    req.on('error', finish);
+    req.on('response', (res) => { res.resume(); finish(new Error(`upgrade refused (${res.statusCode})`)); });
+    req.on('upgrade', (res, upgraded, head) => {
+      socket = upgraded;
+      const onData = (chunk) => {
+        buf = Buffer.concat([buf, chunk]);
+        let frame;
+        while ((frame = decodeFrame(buf))) {
+          buf = buf.subarray(frame.bytesConsumed);
+          if (frame.opcode === OPCODES.CLOSE) return finish(new Error('terminal closed before shell reply'));
+          if (frame.opcode !== OPCODES.BINARY && frame.opcode !== OPCODES.TEXT) continue;
+          output += frame.payload.toString('utf8');
+          if (output.includes('scheme-attached-ok')) return finish();
+          if (!sent) {
+            sent = true;
+            // Split the marker so terminal echo cannot satisfy the round trip.
+            const payload = Buffer.from(JSON.stringify({ t: 'd', d: "printf '%s%s\\n' 'scheme-' 'attached-ok'\r" }));
+            assert.ok(payload.length < 126);
+            const mask = randomBytes(4);
+            const masked = Buffer.from(payload.map((byte, i) => byte ^ mask[i % 4]));
+            socket.write(Buffer.concat([Buffer.from([0x81, 0x80 | payload.length]), mask, masked]));
+          }
+        }
+      };
+      socket.on('data', onData);
+      socket.on('error', finish);
+      socket.on('end', () => finish(new Error('terminal ended before shell reply')));
+      if (head.length) onData(head);
+    });
+    req.end();
+  });
+}
+
+test('C locale preserves shell session identity and metadata after refresh', { skip: !hasTmux }, async () => {
+  const s = scratch();
+  const { child, port } = await startServer(s, { LANG: 'C', LC_ALL: 'C', SYSMON_MEM_FLOOR_MB: '0' });
+  try {
+    const created = await createShell(port, s.home);
+    const response = await request(port, 'GET', '/api/term/sessions');
+    assert.equal(response.status, 200);
+    const sessions = JSON.parse(response.body).sessions;
+    assert.equal(sessions.length, 1);
+    assert.equal(sessions[0].id, created.id);
+    assert.equal(sessions[0].name, 'Locale shell');
+    assert.equal(sessions[0].cwd, s.home);
+    assert.equal(sessions[0].shell, true);
+    assert.equal(sessions[0].codex, false);
+    assert.equal(sessions[0].local, false);
+    assert.ok(Number.isInteger(sessions[0].panePid) && sessions[0].panePid > 0);
+  } finally { await stopServer(child); cleanup(s); }
+});
+
+test('terminal WebSocket reaches the configured tmux socket with literal shell characters', { skip: !hasTmux || !hasScript }, async () => {
+  const s = scratch();
+  s.socket += " '$(false); literal";
+  const { child, port } = await startServer(s, { LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8', SYSMON_MEM_FLOOR_MB: '0', HISTFILE: '/dev/null' });
+  try {
+    const created = await createShell(port, s.home);
+    const sessions = JSON.parse((await request(port, 'GET', '/api/term/sessions')).body).sessions;
+    assert.ok(sessions.some((session) => session.id === created.id), 'API sees the same private session');
+    await terminalRoundTrip(port, created.id);
+  } finally { await stopServer(child); cleanup(s); }
+});
+
+test('Git status filenames round-trip into unstaged and staged diffs', { skip: !hasTmux || !hasGit }, async () => {
+  const s = scratch();
+  const repo = path.join(s.home, 'project');
+  fs.mkdirSync(repo);
+  const git = (...args) => {
+    const result = spawnSync('git', ['-C', repo, ...args], { encoding: 'utf8', env: { ...process.env, HOME: s.home, GIT_CONFIG_NOSYSTEM: '1' } });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout;
+  };
+  const tracked = ['space name.txt', 'quote"name.txt', 'tab\tname.txt', 'line\nname.txt', 'back\\slash.txt', 'café-雪.txt', ' trailing space '];
+  git('init', '-q');
+  git('config', 'user.name', 'Test User');
+  git('config', 'user.email', 'test@example.invalid');
+  for (const name of [...tracked, 'deleted name.txt', 'rename source.txt']) fs.writeFileSync(path.join(repo, name), 'before\n');
+  git('add', '--all');
+  git('-c', 'core.hooksPath=/dev/null', 'commit', '-qm', 'fixture');
+  for (const name of tracked) fs.writeFileSync(path.join(repo, name), 'after\n');
+  git('add', '--', tracked[1]); // Exercise the staged diff fallback too.
+  fs.unlinkSync(path.join(repo, 'deleted name.txt'));
+  git('mv', '--', 'rename source.txt', 'rename target.txt');
+  fs.writeFileSync(path.join(repo, 'untracked\nname.txt'), 'new\n');
+  const { child, port } = await startServer(s, { LANG: 'C.UTF-8', LC_ALL: 'C.UTF-8', SYSMON_MEM_FLOOR_MB: '0' });
+  try {
+    const created = await createShell(port, repo);
+    const response = await request(port, 'GET', `/api/term/git?id=${created.id}&op=status`);
+    assert.equal(response.status, 200, response.body);
+    const status = JSON.parse(response.body);
+    assert.equal(status.ok, true);
+    assert.equal(status.repo, true);
+    assert.deepEqual(status.files, [
+      ...tracked.map((name, i) => ({ xy: i === 1 ? 'M ' : ' M', path: name })),
+      { xy: ' D', path: 'deleted name.txt' },
+      { xy: 'D ', path: 'rename source.txt' },
+      { xy: 'A ', path: 'rename target.txt' },
+      { xy: '??', path: 'untracked\nname.txt' },
+    ].sort((a, b) => Buffer.compare(Buffer.from(a.path), Buffer.from(b.path))));
+    for (const name of tracked) {
+      const reported = status.files.find((file) => file.path === name).path;
+      const diffResponse = await request(port, 'GET', `/api/term/git?id=${created.id}&op=diff&path=${encodeURIComponent(reported)}`);
+      assert.equal(diffResponse.status, 200, diffResponse.body);
+      const result = JSON.parse(diffResponse.body);
+      assert.equal(result.path, name);
+      assert.match(result.diff, /^-before$/m, `before line for ${JSON.stringify(name)}`);
+      assert.match(result.diff, /^\+after$/m, `after line for ${JSON.stringify(name)}`);
+    }
+  } finally { await stopServer(child); cleanup(s); }
+});
 
 test('boots in an empty HOME and serves the cockpit routes', async () => {
   const s = scratch();

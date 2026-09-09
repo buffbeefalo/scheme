@@ -21,6 +21,7 @@ function resume(t, args) {
     const input = {};
     require('node:child_process').execFile = (binary, args, options, callback) => {
       if (require('node:path').basename(binary) !== 'tmux') throw new Error('Unexpected external command');
+      if (args[0] === '-u') args = args.slice(1);
       if (args[0] === 'send-keys') input[args[2]] = args[3];
       callback(null, '', '');
     };

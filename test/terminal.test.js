@@ -125,14 +125,14 @@ test('parseSessions drops interrupted-test artifacts ("zz …") so they never be
   assert.equal(s.some((x) => /^zz /i.test(x.name)), false);
 });
 
-test('tmuxArgs prepends -L only when SYSMON_TMUX_SOCKET is set (prod default = untouched)', () => {
+test('tmuxArgs keeps UTF-8 enabled and the optional socket in a separate argv token', () => {
   const prev = process.env.SYSMON_TMUX_SOCKET;
   try {
     delete process.env.SYSMON_TMUX_SOCKET;
-    assert.deepEqual(T.tmuxArgs(['list-sessions']), ['list-sessions']);   // prod: no socket flag
-    process.env.SYSMON_TMUX_SOCKET = 'cdtest';
+    assert.deepEqual(T.tmuxArgs(['list-sessions']), ['-u', 'list-sessions']);
+    process.env.SYSMON_TMUX_SOCKET = "cdtest '$(false); literal";
     assert.deepEqual(T.tmuxArgs(['new-session', '-d', '-s', 'cd1']),
-      ['-L', 'cdtest', 'new-session', '-d', '-s', 'cd1']);
+      ['-u', '-L', "cdtest '$(false); literal", 'new-session', '-d', '-s', 'cd1']);
   } finally {
     if (prev === undefined) delete process.env.SYSMON_TMUX_SOCKET; else process.env.SYSMON_TMUX_SOCKET = prev;
   }
@@ -610,6 +610,7 @@ test('killSession forgets only sessions tmux confirms gone', async () => {
   process.env.COMMAND_DECK_REGISTRY = `${dir}/sessions.json`;
   delete process.env.SYSMON_TMUX_SOCKET;
   childProcess.execFile = (_file, args, _opts, done) => {
+    if (args[0] === '-u') args = args.slice(1);
     const failed = Object.assign(new Error('tmux failed'), { code: 1 });
     if (args[0] === 'kill-session') return process.nextTick(() => done(failed, '', 'kill failed'));
     if (args[0] === 'has-session') return process.nextTick(() => done(live ? null : failed, '', live ? '' : 'no session'));
@@ -657,6 +658,7 @@ test('resumeSaved counts a tab only when tmux still lists it after the settle wi
   const row = (id) => `${id}\tverify probe\t/tmp\t1700000000\t0\t${uuid}\t\t\t\t\t\t\t\t123\n`;
   let listing = '', sticks = false, launches = 0;
   childProcess.execFile = (_file, args, _opts, done) => {
+    if (args[0] === '-u') args = args.slice(1);
     if (args[0] === 'new-session') { launches++; if (sticks) listing = row(args[3]); }
     if (args[0] === 'list-sessions') return process.nextTick(() => done(null, listing, ''));
     return process.nextTick(() => done(null, '', ''));

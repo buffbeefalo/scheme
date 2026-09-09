@@ -287,7 +287,8 @@ async function listProjects() {
   return [...out].sort();
 }
 function parseGitStatus(out) {
-  return String(out || '').split('\n').filter(Boolean).slice(0, 400).map((l) => ({ xy: l.slice(0, 2), path: l.slice(3) }));
+  // -z leaves paths unquoted; --no-renames keeps one path per NUL-delimited record.
+  return String(out || '').split('\0').filter(Boolean).slice(0, 400).map((l) => ({ xy: l.slice(0, 2), path: l.slice(3) }));
 }
 
 // ---- shared scratchpad (rail "Notes") ------------------------------------------
@@ -638,7 +639,7 @@ const server = http.createServer(async (req, res) => {
         const isRepo = fs.existsSync(path.join(cwd, '.git'));
         if (op === 'status') {
           if (!isRepo) return sendJson(res, 200, { ok: true, repo: false, files: [] });
-          const out = await run('git', ['-C', cwd, 'status', '--porcelain=v1', '--no-renames', '-uall'], 4000);
+          const out = await run('git', ['-C', cwd, 'status', '--porcelain=v1', '-z', '--no-renames', '-uall'], 4000);
           return sendJson(res, 200, { ok: true, repo: true, files: parseGitStatus(out) });
         }
         if (op === 'diff') {
@@ -691,7 +692,7 @@ function ptyArgs(cmd) {
   return process.platform === 'darwin' ? ['-q', '/dev/null', 'sh', '-c', cmd] : ['-q', '-f', '-c', cmd, '/dev/null'];
 }
 function bridgeSession(socket, id) {
-  const cmd = `${terminal.TMUX_BIN} attach-session -t ${id}`;   // id is isSafeId-validated
+  const cmd = [terminal.TMUX_BIN, ...terminal.tmuxArgs(terminal.tmuxAttachArgs(id))].map(terminal.shquote).join(' ');
   const child = spawn('script', ptyArgs(cmd), { env: { ...process.env, TERM: 'xterm-256color' } });
   let alive = true;
   const closeAll = () => {

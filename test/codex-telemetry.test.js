@@ -274,9 +274,17 @@ test('empty input exposes the full parity shape without false negatives', () => 
   }
 });
 
-test('0.144.6 fixture reconstructs every rollout-native parity signal', () => {
-  const file = path.join(__dirname, 'fixtures', 'codex-rollout-0.144.6-parity.jsonl');
-  const t = analyzeCodexRollout(fs.readFileSync(file, 'utf8'));
+test('synthetic rollout combines plans, file changes and plugin calls', () => {
+  const completedItem = (item) => ({ type: 'event_msg', payload: { type: 'item_completed', item } });
+  const t = analyzeCodexRollout([
+    fnCall('update_plan', JSON.stringify({ plan: [{ step: 'Parse rollout', status: 'in_progress' }] })),
+    fnCall('exec'),
+    completedItem({ id: 'files-1', type: 'FileChange', status: 'completed', changes: {
+      '/work/lib/a.js': { type: 'add' }, '/work/lib/b.js': { type: 'add' },
+    } }),
+    completedItem({ id: 'mcp-1', type: 'McpToolCall', server: 'docs', tool: 'search', pluginId: 'docs-plugin' }),
+    taskComplete('turn-1'),
+  ]);
   assert.equal(t.lastTurnId, 'turn-1');
   assert.deepEqual(t.recentFiles, ['/work/lib/b.js', '/work/lib/a.js']);
   assert.equal(t.tools.update_plan, 1);

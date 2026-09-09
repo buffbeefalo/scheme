@@ -44,6 +44,8 @@ If your second screen is a monitor plugged into the **same computer**, open <htt
 
 The same web dashboard adapts to desktop and phone screens. No separate Scheme phone app is required.
 
+The **Telemetry** panel shows the last observed approval setting and, for Codex, a separately labelled sandbox mode. Codex `never` disables approval requests; restricted operations can still fail. Claude `bypassPermissions` bypasses runtime permission checks. A session can have approval prompts disabled while its sandbox stays read-only, and questions can remain pending. These observations can lag; **not reported** means the available session telemetry has no usable value, while unfamiliar values say **unrecognized**. They do not establish user authorization or remove filesystem, network, or other platform restrictions. On smaller screens, open **Tools**, press **◧** (Toggle telemetry), and use **×** to close the panel.
+
 ## See the dashboard
 
 These are screenshots of Scheme with **fictional demonstration data**. They contain no live account, private project, or real agent conversation. The demonstration shows the interface; it is not evidence of a live AI response.

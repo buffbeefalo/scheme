@@ -11,6 +11,6 @@
     "start": "bin/scheme",
     "doctor": "bin/scheme-doctor",
     "check:release": "node scripts/check-release.js",
-    "test": "node --test --test-skip-pattern \"0.144.6 fixture\" test/*.test.js"
+    "test": "node --test test/*.test.js"
   }
 }

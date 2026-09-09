@@ -70,6 +70,7 @@
     "scripts/check-release.js",
     "server.js",
     "test/account-usage.test.js",
+    "test/approval-telemetry.test.js",
     "test/atomicfile.test.js",
     "test/audit.test.js",
     "test/backpressure.test.js",

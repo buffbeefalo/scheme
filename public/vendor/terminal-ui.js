@@ -893,19 +893,41 @@
   }
   const unavailableParity = (label) => railSeg(label, '<div class="none">not emitted by this Codex session</div>');
   const partialParity = (label) => railSeg(label + ' · partial', '<div class="none">none observed in available coverage</div>');
+  function permissionValue(value, meanings, badge = false) {
+    if (typeof value !== 'string' || !value.trim()) return '<span class="none">not reported</span>';
+    const bounded = value.length > 80 ? value.slice(0, 79) + '…' : value;
+    if (!Object.prototype.hasOwnProperty.call(meanings, value)) return 'unrecognized: ' + esc(bounded);
+    const raw = badge ? '<span class="cd-mode ' + value + '">' + esc(value) + '</span>' : esc(value);
+    return esc(meanings[value]) + '<small>' + raw + '</small>';
+  }
+  function permissionRows(tel) {
+    const row = (label, value) => '<div class="cd-kv cd-permission"><span>' + label + '</span><b>' + value + '</b></div>';
+    let rows;
+    if (tel.runtime === 'codex') {
+      const approval = permissionValue(tel.approvalPolicy, {
+        never: 'Disabled', 'on-request': 'May ask', 'on-failure': 'Ask after failure', untrusted: 'Ask unless trusted',
+      });
+      const sandbox = tel.sandbox && typeof tel.sandbox === 'object' && !Array.isArray(tel.sandbox) ? tel.sandbox.type : null;
+      const access = permissionValue(sandbox, {
+        'read-only': 'Read-only', 'workspace-write': 'Workspace writes',
+        'danger-full-access': 'Unrestricted filesystem', 'external-sandbox': 'External sandbox',
+      });
+      rows = row('approval prompts', approval + '<span class="cd-sandbox"><span>sandbox</span>' + access + '</span>');
+    } else {
+      rows = row('permission mode', permissionValue(tel.automode, {
+        default: 'Default checks', plan: 'Plan mode', acceptEdits: 'Auto-accept edits',
+        bypassPermissions: 'Permission checks bypassed', auto: 'Automatic checks',
+      }, true));
+    }
+    return rows + '<div class="none cd-permission-note">Last observed in available session telemetry. Approval prompts and access restrictions are separate.</div>';
+  }
   function renderRail(tel) {
     if (!els.railBody) return;
     if (!tel) { setRailHTML('<div class="cd-railempty">no telemetry yet</div>'); return; }
     const t = tel.tokens || {};
     const model = tel.modelShort || tel.model || '—';
     const isCodex = tel.runtime === 'codex';
-    const mode = tel.automode || 'default';
-    const modeCls = ['plan', 'acceptEdits', 'bypassPermissions', 'default'].indexOf(mode) >= 0 ? mode : 'default';
-    // Codex has an approval policy (never/on-request/untrusted), not Claude's permission mode; and a
-    // rate-limit % + plan the Claude rail can't show. Both come from lib/codex-telemetry.js.
-    const modeRow = isCodex
-      ? '<div class="cd-kv"><span>approval</span><b>' + esc(tel.approvalPolicy || '—') + '</b></div>'
-      : '<div class="cd-kv"><span>mode</span><span class="cd-mode ' + modeCls + '">' + esc(mode) + '</span></div>';
+    const modeRow = permissionRows(tel);
     const rate = tel.codexRate, rateWindows = rate && Array.isArray(rate.windows) ? rate.windows.filter((w) => w && Number.isFinite(w.usedPercent)) : [];
     const rateRow = (isCodex && rateWindows.length)
       ? '<div class="cd-kv"><span>rate limit</span><b>' + rateWindows.map((w) => {
@@ -1555,7 +1577,18 @@
     if (els.copyClose) els.copyClose.onclick = () => closeCopyPanel();
     els.zoomIn.onclick = () => { fontSize = Math.min(22, fontSize + 1); applyFont(); };
     els.zoomOut.onclick = () => { fontSize = Math.max(8, fontSize - 1); applyFont(); };
-    if (els.railToggle) els.railToggle.onclick = () => { const off = els.studio.classList.toggle('rail-off'); try { localStorage.setItem('cd-rail-off', off ? '1' : '0'); } catch (_) {} requestAnimationFrame(refit); };
+    if (els.railToggle) els.railToggle.onclick = () => {
+      if (matchMedia('(max-width:900px)').matches) {
+        els.railToggle.setAttribute('aria-expanded', String(els.studio.classList.toggle('rail-open')));
+      } else {
+        const off = els.studio.classList.toggle('rail-off');
+        els.railToggle.setAttribute('aria-expanded', String(!off));
+        try { localStorage.setItem('cd-rail-off', off ? '1' : '0'); } catch (_) {}
+      }
+      requestAnimationFrame(refit);
+    };
+    const railClose = document.getElementById('cd-rail-close');
+    if (railClose) railClose.onclick = () => { els.studio.classList.remove('rail-open'); els.railToggle.setAttribute('aria-expanded', 'false'); };
     // jump to latest output (exits tmux copy-mode → live)
     els.jump.onclick = () => { if (active) api('POST', '/api/term/scroll', { id: active, op: 'bottom' }).then(updateScroll); };
     // jump BACK to the previous ❯ input; each click steps one input older ('Latest' returns to live)

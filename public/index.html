@@ -265,11 +265,16 @@
   .cd-studio{display:flex;flex-direction:column;flex:1;min-height:0}
   /* terminal stage + telemetry rail side by side; the ResizeObserver on #cd-host refits
      xterm when the rail takes/returns width. Rail collapses on narrow viewports. */
-  .cd-stagewrap{display:flex;flex:1;min-height:0;gap:9px}
+  .cd-stagewrap{display:flex;flex:1;min-height:0;min-width:0;gap:9px;position:relative}
   .cd-rail{width:300px;flex:none;min-height:0}
   .cd-studio[data-rt] .cd-rail.cd-panel{border-top:2px solid var(--rt)}
   .cd-studio.rail-off .cd-stagewrap .cd-rail{display:none}
-  @media(max-width:900px){.cd-stagewrap .cd-rail{display:none}}
+  .cd-rail .cd-rail-close{display:none}
+  @media(max-width:900px){
+    .cd-stagewrap .cd-rail{display:none}
+    .cd-studio.rail-open .cd-stagewrap .cd-rail{display:flex;position:absolute;z-index:30;top:0;bottom:0;right:0;width:min(360px,100%);max-width:100%;box-shadow:-6px 0 22px rgba(0,0,0,.18)}
+    .cd-rail .cd-rail-close{display:grid}
+  }
   /* Wraps at ANY width, not only on phones. The Claude+Codex strip needs ~1146px; unwrapped it
      inflated the whole page's scroll width by ~264px at the Z Fold's unfolded 904px. */
   .cd-usagebar{display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;gap:14px;flex:none;padding:7px 10px;font-family:var(--mono);font-size:10px;line-height:14px;font-variant-numeric:tabular-nums;color:var(--dim);background:var(--s2);border-top:1px solid var(--line)}
@@ -289,9 +294,9 @@
   @media(max-width:1200px){
     .cd-bar{flex-wrap:wrap}
     .cd-lane{order:3;flex:1 0 100%;min-width:0}
-    .cd-toolsbtn{display:inline-flex;align-items:center;margin-left:auto}
+    .cd-bar .cd-toolsbtn{display:inline-flex;align-items:center;margin-left:auto}
     .cd-bar .cd-well{display:none}
-    .cd-bar.tools-open .cd-well{display:flex;order:4;flex:1 0 100%;overflow-x:auto}
+    .cd-bar.tools-open .cd-well{display:flex;order:4;flex:1 0 100%;flex-wrap:wrap;overflow:visible}
     .cd-lnav,.cd-count{min-height:32px}
   }
   /* Touch widths: the ratified 44px minimum for the lane's own controls. */
@@ -665,6 +670,13 @@
   .cd-railbody .seglbl::after{content:"";flex:1;height:1px;background:var(--line)}
   .cd-kv{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;color:var(--mut)}
   .cd-kv b{color:var(--txt);font-weight:600;font-variant-numeric:tabular-nums}
+  .cd-kv.cd-permission{align-items:flex-start;gap:10px}
+  .cd-permission > span{flex:none}
+  .cd-permission b{min-width:0;text-align:right;overflow-wrap:anywhere}
+  .cd-permission small{display:block;color:var(--mut);font-size:10px;font-weight:400}
+  .cd-permission .cd-sandbox{display:block;margin-top:6px}
+  .cd-sandbox > span:first-child{display:block;color:var(--mut);font-size:11px;font-weight:400}
+  .cd-permission-note{line-height:1.4;margin:4px 0 8px}
   .cd-mode{font-family:var(--ui);font-size:10px;font-weight:600;letter-spacing:.8px;padding:3px 10px;border-radius:999px;text-transform:uppercase}
   .cd-mode.auto{background:rgba(169,106,28,.1);color:var(--amber2);border:1px solid rgba(169,106,28,.4)}
   .cd-mode.plan{background:rgba(30,91,255,.07);color:var(--cyan2);border:1px solid rgba(30,91,255,.3)}
@@ -903,7 +915,7 @@
        into 110px at 412px — measured ZERO of 17 pills fully visible. The lane now takes its own
        full-width row here exactly as it does at 1200px, so the strip gets the whole bar. */
     .cd-bar{flex-wrap:wrap;gap:6px;padding:6px 7px}
-    #cd-rail-toggle,.cd-dims{display:none}
+    .cd-dims{display:none}
     .cd-bar .cd-sessions{min-width:0}
     .cd-bar .cd-sess{padding:8px 6px 8px 11px}
     .cd-bar .cd-sess .nm{max-width:120px}
@@ -1123,7 +1135,7 @@
         <button class="cd-zoom" id="cd-copytext" title="Copy text — open the full scrollback to select &amp; copy any output (even taller than the window)">⧉</button>
         <button class="cd-zoom" id="cd-zoomout" title="Smaller text">A−</button>
         <button class="cd-zoom" id="cd-zoomin" title="Bigger text">A+</button>
-        <button class="cd-zoom" id="cd-rail-toggle" title="Toggle the session telemetry panel">◧</button>
+        <button class="cd-zoom" id="cd-rail-toggle" aria-label="Toggle telemetry" aria-controls="cd-rail" title="Toggle the session telemetry panel">◧</button>
       </div>
       <!-- Switcher: a separate dialog, NOT a second tablist, and deliberately outside #cd-sessions
            so the 2s telemetry repaint (which rebuilds that list wholesale) cannot destroy it. -->
@@ -1190,6 +1202,7 @@
         <button class="cd-railtab active" id="cd-rail-tel" title="Live telemetry for the active session">Telemetry</button>
         <button class="cd-railtab" id="cd-rail-notepad" title="Scratchpad — autosaves on the host, syncs across devices">Notes</button>
         <span class="sp"></span><span class="cd-notes-state" id="cd-notes-state"></span>
+        <button class="cd-icon cd-rail-close" id="cd-rail-close" aria-label="Close telemetry panel">×</button>
       </div>
       <div class="cd-railbody" id="cd-railbody"><div class="cd-railempty">no active session</div></div>
       <div class="cd-claude-sw" id="cd-claude-sw" title="Claude runtime switches — writes ~/.claude config; takes effect for NEW Claude sessions only">
@@ -1292,7 +1305,7 @@
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/addon-fit.js"></script>
 <script src="/vendor/addon-search.js"></script>
-<script src="/vendor/terminal-ui.js?v=standalone1"></script>
+<script src="/vendor/terminal-ui.js?v=approval-telemetry1"></script>
 <script>
 'use strict';
 const $=(id)=>document.getElementById(id);

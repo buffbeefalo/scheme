@@ -2,43 +2,43 @@
   "schemaVersion": 1,
   "repository": "buffbeefalo/scheme",
   "releaseTag": "v1.1.0",
-  "reviewed": false,
+  "reviewed": true,
   "assets": [
     {
       "path": "media/scheme-product.mp4",
       "source": "release",
-      "sha256": "",
-      "bytes": 0
+      "sha256": "bf5167990033f219b76883900d46faed59cb39c93c3fc3e87bec31d1b83564fd",
+      "bytes": 4225333
     },
     {
       "path": "media/scheme-setup.mp4",
       "source": "release",
-      "sha256": "",
-      "bytes": 0
+      "sha256": "b7ee916b5de00c41f316e22d71e13589f3dcec48b6e4a0544f80b01145ea603b",
+      "bytes": 18104776
     },
     {
       "path": "captions/scheme-product.vtt",
       "source": "repository",
-      "sha256": "",
-      "bytes": 0
+      "sha256": "daa56ab5aebfc155338e6c311f42369792993c2bff61dbd478354c4c35677e8f",
+      "bytes": 2424
     },
     {
       "path": "captions/scheme-setup.vtt",
       "source": "repository",
-      "sha256": "",
-      "bytes": 0
+      "sha256": "3d1bd9d59eed94b7272c11e0d1395c98883e054f904150c19dc9c2d3e1660f85",
+      "bytes": 13438
     },
     {
       "path": "transcripts/product-transcript.md",
       "source": "repository",
-      "sha256": "",
-      "bytes": 0
+      "sha256": "adda781a041bb3f3431a70984104577276c013a48b868464916a9d7bbd238186",
+      "bytes": 1925
     },
     {
       "path": "transcripts/setup-transcript.md",
       "source": "repository",
-      "sha256": "",
-      "bytes": 0
+      "sha256": "070584d1b533d91b4bf8aa451fc9fcaab6e8122d52264b4fd5ddde0cda9eced1",
+      "bytes": 9025
     }
   ],
   "films": [
@@ -88,7 +88,7 @@
     },
     {
       "id": "setup",
-      "durationSeconds": 504.2,
+      "durationSeconds": 504.208333,
       "width": 1920,
       "height": 1080,
       "chapters": [

@@ -85,7 +85,7 @@ The desktop setup used **two separate graphical Ubuntu 24.04 ARM64 virtual machi
 | Tailscale | Official private Serve setup is documented. | A real Tailscale account connection was not completed in the desktop test. |
 | Other hosts | macOS and WSL setup alternatives are documented. | Both remain unverified as hosts for this release. |
 
-Screenshots and films use clean demonstration content. Any staged AI conversation is an illustration, not proof that a provider was called. The public website hosts only the presentation and reviewed media; it does not run Scheme or expose a terminal.
+Screenshots and films show the real application on clean demonstration desktops with fictional example projects. Animated diagrams explain the connections, and the phone preview uses browser touch emulation. The public website hosts only the presentation and reviewed media; it does not run Scheme or expose a terminal.
 
 ## Where to go next
 

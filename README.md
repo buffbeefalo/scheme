@@ -8,9 +8,9 @@ Scheme puts your terminals and coding tools in a dashboard you can open from a b
 
 **[Watch the product tour](https://buffbeefalo.github.io/scheme/#watch) · [Watch the complete setup](https://buffbeefalo.github.io/scheme/#setup) · [Read the setup guide](INSTALL-HOST.md) · [Download v1.1.0](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.0.zip)**
 
-[![Scheme desktop dashboard with fictional demonstration sessions.](docs/images/scheme-desktop-demo.png)](https://buffbeefalo.github.io/scheme/#watch)
+[![Scheme desktop dashboard running a real Shell in an example workspace.](docs/images/scheme-desktop-demo.png)](https://buffbeefalo.github.io/scheme/#watch)
 
-*Demonstration images use fictional example content. Staged AI output illustrates the interface; it is not a live provider response. The films include English captions, chapter links, and readable transcripts.*
+*Images and films show the real application on clean demonstration desktops with fictional example projects. The phone preview uses browser touch emulation. The films include English captions, chapter links, and readable transcripts.*
 
 ## One host, the screen you need
 

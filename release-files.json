@@ -23,7 +23,6 @@
     "bin/scheme-doctor",
     "bin/service-config.js",
     "docs/architecture.svg",
-    "docs/images/scheme-changes-demo.png",
     "docs/images/scheme-desktop-demo.png",
     "docs/images/scheme-mobile-demo.png",
     "docs/images/scheme-sessions-demo.png",
@@ -147,10 +146,9 @@
     "public/vendor/xterm.js": "1f991ac3b4b283ebf96e60ae23a00a52765dd3a2e46fa6fdda9f1aab032f7495"
   },
   "binaryFiles": {
-    "docs/images/scheme-changes-demo.png": "178245c2ceeaf9e8a05904bfeb7d845ebc6ae680a1e5c91952e201bbcc9eb533",
-    "docs/images/scheme-desktop-demo.png": "3c6e445723b75e9356cd3215b938daa3dc387e06d67630b6c6e098ee6cb7eba7",
-    "docs/images/scheme-mobile-demo.png": "1c7d9913e0d1e1824a6d0d7da435f40f86708a5b0926871b5d1e454d675a7c49",
-    "docs/images/scheme-sessions-demo.png": "aa312cb0a02671ea093b33c27c25c8a8e642cb532895aa782313c0f918a24b1b"
+    "docs/images/scheme-desktop-demo.png": "b6908b135f7b6f65075f1b45bbada0c6728135f860946b26812735940aa947cd",
+    "docs/images/scheme-mobile-demo.png": "7e905c5ca7bb0b744b8c03ee5cd25895d0788cae4f173b05bddb25cce05163e2",
+    "docs/images/scheme-sessions-demo.png": "b3b791e0dd7d0598f11bdff95597985e8fec3f64db827717bfb9c770317ddbf8"
   },
   "lineExceptions": [
     {

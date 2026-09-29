@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eee3cd">
+  <meta name="description" content="Scheme keeps terminals and coding tools on your own working computer, ready from a browser on another screen. Watch the tour and follow the complete setup.">
+  <meta property="og:title" content="Scheme — your working computer, from any screen">
+  <meta property="og:description" content="Keep your projects on your computer. Open your terminals from another screen. A self-hosted dashboard with a guided setup.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://buffbeefalo.github.io/scheme/assets/scheme-desktop-demo.png">
+  <link rel="canonical" href="https://buffbeefalo.github.io/scheme/">
+  <title>Scheme — your working computer, from any screen</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <script src="site.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header wrap">
+    <a class="wordmark" href="./" aria-label="Scheme home"><img src="icon.svg" width="34" height="34" alt="">Scheme</a>
+    <nav aria-label="Main navigation">
+      <a href="#watch">Watch</a>
+      <a href="#setup">Set up</a>
+      <a href="https://github.com/buffbeefalo/scheme">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="release-label"><span class="connection-dot" aria-hidden="true"></span>Scheme v1.1.0 <span class="release-license">Free &amp; open source</span></p>
+        <h1 id="hero-title">Your working computer.<br>Any screen.</h1>
+        <p class="hero-description">Your projects, terminals, and coding tools stay on a computer you control. Scheme gives you a place to use them from a browser, wherever your private connection reaches.</p>
+        <div class="actions">
+          <a class="button" href="#watch"><span class="play-icon" aria-hidden="true">▶</span>Watch the tour</a>
+          <a class="text-button" href="#setup">Get Scheme running</a>
+        </div>
+        <p class="hero-footnote">Start with a plain Shell. Add Claude Code, Codex, or a local model when you’re ready.</p>
+      </div>
+
+      <figure class="connection-scene">
+        <div class="screen-window">
+          <div class="screen-toolbar"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Your browser</span><span class="connection-dot" aria-hidden="true"></span></div>
+          <a href="#inside" aria-label="See the Scheme dashboard at a larger size"><img class="hero-screen" src="assets/scheme-desktop-demo.png" width="1440" height="960" alt="Scheme desktop interface showing fictional demonstration sessions." fetchpriority="high"></a>
+        </div>
+        <div class="connection-diagram" aria-hidden="true">
+          <svg viewBox="0 0 580 124" fill="none"><path class="connection-path" d="M86 35v36q0 20 20 20h310q20 0 20-20V24"/><path class="connection-tick" d="m429 34 7-11 7 11"/><circle class="connection-pulse" cx="256" cy="91" r="5"/></svg>
+          <div class="host-machine"><span class="host-indicator"></span><span class="host-vent"></span><span class="host-vent"></span></div>
+          <span class="host-caption">Your host<br><small>The work stays here</small></span>
+          <span class="wire-caption">A private connection</span>
+          <span class="browser-cursor">▌</span>
+        </div>
+        <figcaption>One computer does the work. Another screen brings it with you.<br><span>Preview uses fictional demonstration content.</span></figcaption>
+      </figure>
+    </section>
+
+    <div class="principles wrap" aria-label="Scheme essentials">
+      <p><strong>Your machine</strong><span>Projects and processes stay on the host.</span></p>
+      <p><strong>Your tools</strong><span>Use a Shell or an installed coding assistant.</span></p>
+      <p><strong>Your connection</strong><span>Reach it privately with SSH or Tailscale.</span></p>
+    </div>
+
+    <section id="watch" class="film-section section-space" aria-labelledby="product-heading">
+      <div class="wrap">
+        <div class="section-heading">
+          <div><p class="section-context">Meet Scheme</p><h2 id="product-heading">Pick up where<br>you left off.</h2></div>
+          <p>Open a terminal. Change screens. Come back to your work. See what the dashboard does and where the work actually runs.</p>
+        </div>
+        <div class="video-shell">
+          <video id="product-film" controls playsinline preload="none" poster="assets/scheme-desktop-demo.png" aria-label="Scheme product tour" aria-describedby="product-description" tabindex="0">
+            <source src="media/scheme-product.mp4" type="video/mp4">
+            <track kind="captions" src="captions/scheme-product.vtt" srclang="en" label="English" default>
+            Your browser cannot play this film. <a href="media/scheme-product.mp4">Download the product film</a> or <a href="transcripts/product-transcript.html">read the transcript</a>.
+          </video>
+          <p class="video-error" data-error-for="product-film" role="status" hidden>The film could not load. <a href="media/scheme-product.mp4">Open the video file</a> or <a href="transcripts/product-transcript.html">read the transcript</a>.</p>
+        </div>
+        <div class="film-meta"><p id="product-description">{{productDuration}} · Narrated tour · English captions</p><a href="media/scheme-product.mp4" download>Download film</a></div>
+        <nav class="chapters" aria-label="Product film chapters">{{productChapters}}</nav>
+        <details class="transcript"><summary>Read the product film transcript</summary><div class="transcript-text">{{productTranscript}}<p><a href="transcripts/product-transcript.html">Open readable transcript</a> <span aria-hidden="true">/</span> <a href="transcripts/product-transcript.md" download>Download text</a></p></div></details>
+      </div>
+    </section>
+
+    <section id="inside" class="inside-section wrap section-space" aria-labelledby="inside-heading">
+      <div class="section-heading">
+        <div><p class="section-context">Inside the dashboard</p><h2 id="inside-heading">A place for the<br>work in progress.</h2></div>
+        <p>Keep several sessions within reach, see the details your tools report, and spend less time finding the terminal you need.</p>
+      </div>
+      <figure class="dashboard-figure"><a href="assets/scheme-desktop-demo.png"><img src="assets/scheme-desktop-demo.png" width="1440" height="960" loading="lazy" alt="Scheme terminal dashboard with several fictional sessions and a side panel for reported activity."></a><figcaption>Demonstration workspace with fictional projects and output. AI labels illustrate the interface; they do not prove a live provider response.</figcaption></figure>
+      <div class="feature-grid">
+        <article><span class="feature-mark" aria-hidden="true">›_</span><h3>Start with a Shell</h3><p>A normal terminal is enough to try Scheme. Your viewing device needs a browser; the programs run on the host.</p></article>
+        <article><span class="feature-mark" aria-hidden="true">▤</span><h3>Keep sessions in reach</h3><p>Switch among tools and projects. Browse the session list and use the details that are available to find your place.</p></article>
+        <article><span class="feature-mark" aria-hidden="true">◐</span><h3>See what is known</h3><p>Activity and usage come from local tool reports. An unavailable reading stays unknown rather than pretending work has stopped.</p></article>
+      </div>
+      <div class="screen-story">
+        <div class="phone-crop"><img src="assets/scheme-mobile-demo.png" width="390" height="844" loading="lazy" alt="Fictional Scheme phone layout showing a terminal and touch controls."></div>
+        <div><h3>A smaller screen.<br>The same working computer.</h3><p>The layout adapts to the space you have. Touch controls bring useful terminal keys within reach, and the host keeps the session while your browser is away.</p><p>Keep the host awake. Closing a browser, restarting Scheme, and rebooting the computer are different events.</p><a class="text-button" href="https://github.com/buffbeefalo/scheme/blob/v1.1.0/CAPABILITIES.md#continuity-what-survives">Understand session continuity</a><p class="small-note">Phone illustration uses fictional content. Physical iPhone and Android testing is not claimed for this release.</p></div>
+      </div>
+    </section>
+
+    <section id="setup" class="setup-section section-space" aria-labelledby="setup-heading">
+      <div class="wrap">
+        <div class="section-heading"><div><p class="section-context">From download to first terminal</p><h2 id="setup-heading">Make room for<br>your own Scheme.</h2></div><p>Follow the complete walkthrough, or keep the written guide beside you. Begin on the computer that will run your tools.</p></div>
+        <div class="setup-layout">
+          <div>
+            <div class="video-shell">
+              <video id="setup-film" controls playsinline preload="none" poster="assets/scheme-sessions-demo.png" aria-label="Complete Scheme setup walkthrough" aria-describedby="setup-description" tabindex="0">
+                <source src="media/scheme-setup.mp4" type="video/mp4">
+                <track kind="captions" src="captions/scheme-setup.vtt" srclang="en" label="English" default>
+                Your browser cannot play this film. <a href="media/scheme-setup.mp4">Download the setup film</a> or <a href="transcripts/setup-transcript.html">read the transcript</a>.
+              </video>
+              <p class="video-error" data-error-for="setup-film" role="status" hidden>The film could not load. <a href="media/scheme-setup.mp4">Open the video file</a> or <a href="transcripts/setup-transcript.html">read the transcript</a>.</p>
+            </div>
+            <div class="film-meta"><p id="setup-description">{{setupDuration}} · Complete walkthrough · English captions</p><a href="media/scheme-setup.mp4" download>Download film</a></div>
+          </div>
+          <aside class="setup-chapters"><h3>Jump to a step</h3><nav class="chapters chapters-vertical" aria-label="Setup film chapters">{{setupChapters}}</nav><a href="transcripts/setup-transcript.html">Read the complete transcript</a></aside>
+        </div>
+        <details class="transcript"><summary>Read the setup film transcript</summary><div class="transcript-text">{{setupTranscript}}<p><a href="transcripts/setup-transcript.html">Open readable transcript</a> <span aria-hidden="true">/</span> <a href="transcripts/setup-transcript.md" download>Download text</a></p></div></details>
+
+        <div class="getting-started">
+          <h3>Your first working session</h3>
+          <ol class="setup-steps">
+            <li><h4>Prepare the working computer</h4><p>Install Node.js 22 or newer, tmux, and the terminal helper. Download Scheme and run its doctor. There is no application build or package-install step.</p><a href="https://github.com/buffbeefalo/scheme/blob/v1.1.0/INSTALL-HOST.md">Open the host setup guide</a></li>
+            <li><h4>Open a Shell</h4><p>Start Scheme, open the local dashboard, then choose <strong>＋ New</strong>, <strong>Shell</strong>, and <strong>Start</strong>. The guide includes a harmless first command.</p><p class="small-note">On an 8 GiB host, use the documented 1 GiB memory reserve for the Shell test.</p></li>
+            <li><h4>Connect another screen</h4><p>Use an SSH tunnel from another desktop, or follow the private Tailscale guide for a desktop or phone. Keep Scheme bound to the host’s local address.</p><a href="https://github.com/buffbeefalo/scheme/blob/v1.1.0/INSTALL-DESKTOP.md">Connect a desktop</a> <span aria-hidden="true">/</span> <a href="https://github.com/buffbeefalo/scheme/blob/v1.1.0/INSTALL-MOBILE.md">Connect a phone</a></li>
+          </ol>
+        </div>
+
+        <div class="validation-note"><h3>What we actually tested</h3><p>Two hosted graphical Ubuntu 24.04 ARM64 desktops, each with 8 GiB of memory: host setup, a real Shell, viewing through SSH, browser closure and reconnection, a Scheme service restart, and host reboot recovery. The Shell test used the documented 1 GiB reserve.</p><p>Cloud AI and Tailscale sign-ins, physical phones, macOS hosting, and WSL hosting remain unverified. A reboot starts a new process; it does not preserve a running job.</p><a href="https://github.com/buffbeefalo/scheme/blob/v1.1.0/CAPABILITIES.md#validation-for-v110">Read the validation scope</a></div>
+      </div>
+    </section>
+
+    <section class="closing wrap section-space" aria-labelledby="closing-heading">
+      <div><img src="icon.svg" width="56" height="56" alt=""><h2 id="closing-heading">Keep your work<br>within reach.</h2><p>Free, open source, and self-hosted.<br>Your machine, your tools, your choice of screen.</p></div>
+      <div class="closing-links"><a class="button" href="https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.0.zip">Download Scheme v1.1.0</a><a href="https://github.com/buffbeefalo/scheme/blob/v1.1.0/INSTALL-HOST.md">Read the setup guide</a><a href="https://github.com/buffbeefalo/scheme/blob/v1.1.0/TROUBLESHOOTING.md">Get help with a problem</a></div>
+    </section>
+  </main>
+  <footer class="site-footer wrap"><a class="wordmark" href="./">Scheme</a><p>A public guide and video library. Your Scheme dashboard runs on your own computer.</p><nav aria-label="Footer navigation"><a href="https://github.com/buffbeefalo/scheme/blob/v1.1.0/SECURITY.md">Security</a><a href="https://github.com/buffbeefalo/scheme/blob/v1.1.0/LICENSE">MIT license</a><a href="https://github.com/buffbeefalo/scheme">Source</a></nav></footer>
+</body>
+</html>

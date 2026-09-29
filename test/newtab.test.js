@@ -75,9 +75,9 @@ test('launchCmd local mode swaps in claude-local and drops --effort max', () => 
 
 test('omitted models emit no CLI override while explicit automation overrides remain', () => {
   const localDefault = launchCmd('UUID', '', true);
-  const localPinned = launchCmd('UUID', '', true, 'qwen3-coder:30b');
+  const localPinned = launchCmd('UUID', '', true, 'glm-4.7-flash');
   assert.doesNotMatch(localDefault, /--model\b/);
-  assert.match(localPinned, /--model qwen3-coder:30b\b/);
+  assert.match(localPinned, /--model glm-4.7-flash\b/);
   const codexDefault = codexLaunchCmd('', null);
   const codexPinned = codexLaunchCmd('', 'gpt-5.6-terra');
   assert.doesNotMatch(codexDefault, /-c ['"]?model=/);

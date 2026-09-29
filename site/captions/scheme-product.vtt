@@ -1,0 +1,111 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:01.195
+Your work has a home.
+
+00:00:01.475 --> 00:00:03.053
+Your screen does not have to.
+
+00:00:03.333 --> 00:00:07.792
+Meet Scheme: a small, self-hosted cockpit
+for the computer that does the work.
+
+00:00:08.342 --> 00:00:11.819
+Your projects and terminal sessions stay
+on your working computer.
+
+00:00:12.099 --> 00:00:16.618
+Open a browser on another desktop, a
+laptop, or a phone, and reconnect through
+
+00:00:16.618 --> 00:00:18.009
+your private connection.
+
+00:00:18.559 --> 00:00:19.561
+Start with Shell.
+
+00:00:19.841 --> 00:00:22.529
+Open a terminal, run a command, and see
+the result.
+
+00:00:22.809 --> 00:00:26.543
+This is the real application running on a
+clean desktop machine.
+
+00:00:27.093 --> 00:00:29.077
+Keep separate tasks in separate tabs.
+
+00:00:29.357 --> 00:00:33.489
+Choose Shell, Claude Code, Codex, or a
+local model when those tools are
+
+00:00:33.489 --> 00:00:34.071
+installed.
+
+00:00:34.351 --> 00:00:37.103
+Your own accounts and hardware power the
+tools you choose.
+
+00:00:37.653 --> 00:00:41.995
+Find a session, return to its project, and
+follow the activity your tools
+
+00:00:41.995 --> 00:00:42.411
+report.
+
+00:00:42.691 --> 00:00:46.589
+Missing information stays unknown, so the
+dashboard does not pretend to know
+
+00:00:46.589 --> 00:00:47.512
+more than it does.
+
+00:00:48.062 --> 00:00:50.558
+Close the browser and let the host keep
+working.
+
+00:00:50.838 --> 00:00:52.417
+Come back to the same terminal.
+
+00:00:52.697 --> 00:00:56.746
+We tested that on two independent desktop
+machines, including a job that
+
+00:00:56.746 --> 00:00:58.883
+finished while the browser was closed.
+
+00:00:59.433 --> 00:01:00.479
+Change the theme.
+
+00:01:00.759 --> 00:01:02.188
+Make room for the terminal.
+
+00:01:02.468 --> 00:01:05.135
+Use the smaller-screen controls when space
+is tight.
+
+00:01:05.415 --> 00:01:08.167
+The same workspace adapts to the screen in
+front of you.
+
+00:01:08.717 --> 00:01:11.149
+Keep the working computer powered on and
+awake.
+
+00:01:11.429 --> 00:01:15.354
+A reboot ends running processes, even when
+saved tabs reopen.
+
+00:01:15.634 --> 00:01:19.559
+A private connection protects access to
+the computer that holds your work.
+
+00:01:20.109 --> 00:01:20.856
+Scheme.
+
+00:01:21.136 --> 00:01:23.077
+Your working computer, from any screen.
+
+00:01:23.357 --> 00:01:27.411
+Open the setup guide, watch the full
+walkthrough, and try your first terminal.

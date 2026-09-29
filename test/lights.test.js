@@ -34,9 +34,18 @@ function fakeDeps(overrides = {}) {
   };
 }
 const S = (o) => ({ id: 'cd1', cwd: '/w', uuid: '11111111-2222-3333-4444-555555555555', ...o });
+
+test('a live Codex pane whose identity cannot be verified never inherits idle state from an old binding', async () => {
+  const c = createLightsCollector(fakeDeps({
+    backfillCodexUuid: async session => { session.codexIdentityVerified = false; },
+    readTail: async () => CODEX_DONE,
+  }));
+  const out = await c.collect([S({ codex: true, panePid: 123, codexUuid: '11111111-1111-4111-8111-111111111111' })]);
+  assert.equal(out.termLights.cd1.working, null);
+});
 // Compact switcher metadata rides the same tuple (council a6363f19 §c); truthfulness of each
 // field is owned by test/session-metadata.test.js — here it only has to travel intact.
-const NO_META = { stateSince: null, lastActivity: null, contextTokens: null, contextWindow: null, modelShort: null };
+const NO_META = { stateSince: null, lastActivity: null, contextTokens: null, contextWindow: null, modelShort: null, ask: null, where: null, lastAction: null, lastActionAt: null };
 
 test('summarize preserves unknown instead of coercing it false', () => {
   assert.deepEqual(summarize({}), {
@@ -48,7 +57,7 @@ test('summarize preserves unknown instead of coercing it false', () => {
 test('claude tuple + attention/asks parity from one analysis', async () => {
   const c = createLightsCollector(fakeDeps({ readTail: async () => ASK_LINE }));
   const out = await c.collect([S({})]);
-  assert.deepEqual(out.termLights.cd1, { working: true, needsInput: true, needsInputKind: 'question', waitingOnBackground: false, lastTurnId: null, ...NO_META, lastActivity: '2026-07-17T01:00:00.000Z', modelShort: 'opus-4-8' });
+  assert.deepEqual(out.termLights.cd1, { working: true, needsInput: true, needsInputKind: 'question', waitingOnBackground: false, lastTurnId: null, ...NO_META, lastActivity: '2026-07-17T01:00:00.000Z', modelShort: 'opus-4-8', lastAction: 'Asking you a question', lastActionAt: '2026-07-17T01:00:00.000Z' });
   assert.deepEqual(out.attention, { cd1: 'question' });
   assert.deepEqual(out.asks, { cd1: { kind: 'question' } });
   assert.equal(out.pendingById.cd1.kind, 'question');
@@ -175,7 +184,7 @@ test('L1 boundary: an ask outside a 400-line window but inside 4000 raises needs
   const filler = [];
   for (let i = 0; i < 1000; i++) filler.push(JSON.stringify({ type: 'progress', timestamp: '2026-07-17T01:30:00.000Z' }));
   const tail = [ASK_LINE, ...filler].join('\n');
-  assert.equal(analyzeTranscript(tail.split('\n').slice(-400)).needsInput, false);
+  assert.equal(analyzeTranscript(tail.split('\n').slice(-400)).needsInput, null);
   const c = createLightsCollector(fakeDeps({ readTail: async (f, lines) => { assert.equal(lines, TAIL_LINES); return tail; } }));
   const out = await c.collect([S({})]);
   assert.equal(out.termLights.cd1.needsInput, true);

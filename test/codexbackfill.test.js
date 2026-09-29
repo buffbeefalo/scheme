@@ -81,3 +81,42 @@ test('backfill uses the pre-launch anchor, rejects far old candidates, and accep
   const far = makeDeps([{ id: old.id, createdAt: old.createdAt }], () => [{ uuid: ub, startMs: 5600000 }], { captureWindowMs: 300000 }).deps;
   assert.equal(await terminal.backfillCodexUuid(old, [old], far), null, 'a sole old, mtime-bumped candidate is outside the acceptance window');
 });
+
+test('a live pane repairs a stale binding from its actual process instead of a nearby rollout', async () => {
+  const session = { id: 'cda', codex: true, cwd: '/proj', panePid: 1234, codexUuid: ub, createdAt: 5000000 };
+  const { deps, writes } = makeDeps([{ ...session }], () => { assert.fail('a live pane must not use timing guesses'); });
+  deps.findLiveCodexUuid = pid => { assert.equal(pid, 1234); return ua; };
+  assert.equal(await terminal.backfillCodexUuid(session, [session], deps), ua);
+  assert.equal(session.codexUuid, ua);
+  assert.deepEqual(writes, [{ id: 'cda', codexUuid: ua }]);
+});
+
+test('an unidentified live pane waits without claiming another conversation', async () => {
+  const session = { id: 'cda', codex: true, cwd: '/proj', panePid: 1234, createdAt: 5000000 };
+  const { deps, writes } = makeDeps([{ ...session }], () => { assert.fail('must not fall back to timing'); });
+  deps.findLiveCodexUuid = () => null;
+  assert.equal(await terminal.backfillCodexUuid(session, [session], deps), null);
+  assert.deepEqual(writes, []);
+});
+
+test('a failed tmux binding never changes the registry or live snapshot', async () => {
+  const session = { id: 'cda', codex: true, cwd: '/proj', panePid: 1234, createdAt: 5000000 };
+  const { deps, writes } = makeDeps([{ ...session }], () => []);
+  deps.findLiveCodexUuid = () => ua;
+  deps.run = async () => ({ ok: false });
+  assert.equal(await terminal.backfillCodexUuid(session, [session], deps), null);
+  assert.equal(session.codexUuid, undefined);
+  assert.deepEqual(writes, []);
+});
+
+test('a registry failure remains retryable and never reports a persisted binding', async () => {
+  const session = { id: 'cda', codex: true, cwd: '/proj', panePid: 1234, codexUuid: ub };
+  const { deps } = makeDeps([{ ...session }], () => []);
+  deps.findLiveCodexUuid = () => ua;
+  deps.registry.upsert = () => false;
+  assert.equal(await terminal.backfillCodexUuid(session, [session], deps), null);
+  assert.equal(session.codexUuid, ub);
+  deps.registry.upsert = () => true;
+  assert.equal(await terminal.backfillCodexUuid(session, [session], deps), ua);
+  assert.equal(session.codexUuid, ua);
+});

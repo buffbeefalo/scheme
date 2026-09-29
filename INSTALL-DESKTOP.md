@@ -6,6 +6,8 @@ This guide is for a **viewing computer**: a second Windows, Mac, or Linux deskto
 
 If this is just a second monitor connected to the working computer, open <http://localhost:3000> on that computer and move the browser to that monitor. No remote setup is needed.
 
+The v1.1.0 clean desktop test used the [SSH route below](#alternative-connection-with-ssh) between two graphical Ubuntu machines. The Tailscale route is documented from its official instructions; a real account sign-in was not part of that test.
+
 ## Recommended connection with Tailscale
 
 Before starting, finish [working computer setup through step 5](INSTALL-HOST.md#5-connect-privately-with-tailscale). Leave Scheme running and keep the working computer awake. Have the **https://…ts.net** address printed by that step ready.

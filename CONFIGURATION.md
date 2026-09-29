@@ -23,7 +23,7 @@ export SYSMON_MAX_SESSIONS=4
 bin/scheme
 ```
 
-The reserve is an admission check, not a memory cap. Local models need extra memory. Restore the default with `unset SYSMON_MEM_FLOOR_MB` before starting Scheme again.
+The 1 GiB reserve was exercised on the clean 8 GiB Ubuntu demonstration host. The reserve is an admission check, not a memory cap. Local models need extra memory. Restore the default with `unset SYSMON_MEM_FLOOR_MB` before starting Scheme again.
 
 ## Claude effort setting
 
@@ -68,7 +68,7 @@ The `SYSMON_` and `COMMAND_DECK_` names are historical compatibility names. Keep
 | `OLLAMA_HOST` | Local Ollama default | Optional address used by the host's Ollama tooling and status probe. |
 | `SCHEME_PROJECT_DIRS` | Empty | Additional colon-separated project directories. |
 | `COMMAND_DECK_ALLOWED_HOSTS` | Empty | Extra comma-separated trusted dashboard hostnames; this is not authentication. |
-| `COMMAND_DECK_IDLE_CLOSE_HOURS` | `48` | Auto-close idle tabs; working or waiting-for-input tabs are retained. |
+| `COMMAND_DECK_IDLE_CLOSE_HOURS` | `48` | Auto-close proven idle tabs; working, waiting-for-input, or unknown agent activity is retained. |
 | `SYSMON_MAX_SESSIONS` | `24` | Maximum admitted tabs. |
 | `SYSMON_MEM_FLOOR_MB` | `8000` | Minimum available memory for a new tab on Linux. |
 | `COMMAND_DECK_REGISTRY` | `~/.claude/command-deck/sessions.json` | Saved tab metadata. |
@@ -77,6 +77,12 @@ The `SYSMON_` and `COMMAND_DECK_` names are historical compatibility names. Keep
 | `SYSMON_TMUX_SOCKET` | Default tmux server | Optional isolated tmux server name; mainly for testing. |
 
 The background installer preserves the settings listed above plus `PATH` and `SHELL`. It preserves explicit empty values and does not save API keys. Rerun it from the same configured terminal after changing settings or moving your Node installation. UTF-8 locale configuration is separate: configure it for the host and service environment as described in [troubleshooting](TROUBLESHOOTING.md#tabs-are-missing-or-their-details-look-wrong).
+
+## Browser preferences
+
+**Auto**, **Light**, and **Dark** change the surrounding dashboard; Auto follows the device preference. Theme and text-size choices live in that browser when storage is available. The terminal remains dark for readable command colors.
+
+On narrow touch layouts, each session’s Write draft uses the current browser tab’s session storage. It can disappear when that tab or its storage is cleared, and it is not synchronized to another device. The Read panel is a refreshable snapshot of terminal output. [The capability guide](CAPABILITIES.md#read-and-write-on-a-smaller-screen) explains those controls.
 
 ## Where your data stays
 

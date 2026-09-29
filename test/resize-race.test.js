@@ -26,7 +26,7 @@ test('concurrent resizes settle the window AND the attached client at the LAST r
   const sock = process.env.SYSMON_TMUX_SOCKET;
   const tmux = (args) => execFileSync('tmux', ['-L', sock, ...args], { encoding: 'utf8' }).trim();
   const id = 'cdrace1';
-  let child = null;
+  let child = null, attachment = null;
   try {
     try { tmux(['new-session', '-d', '-s', id, '-x', '120', '-y', '30', '-c', '/tmp']); } catch { return t.skip('tmux unavailable'); }
     tmux(['set-option', '-t', id, 'window-size', 'manual']);
@@ -34,6 +34,7 @@ test('concurrent resizes settle the window AND the attached client at the LAST r
     const T = require('../lib/terminal');
     // Attach a client exactly the way the bridge does: util-linux script supplies the PTY.
     child = spawn('script', ['-q', '-f', '-c', `tmux -L ${sock} attach-session -t ${id}`, '/dev/null'], { env: { ...process.env, TERM: 'xterm-256color' } });
+    attachment = T.createAttachmentResizer(id, child);
     child.stdout.on('data', () => {}); child.stderr.on('data', () => {});
     for (let i = 0; i < 50 && !tmux(['list-clients', '-t', id, '-F', '#{client_tty}']); i++) await sleep(100);
     assert.ok(tmux(['list-clients', '-t', id, '-F', '#{client_tty}']), 'a client is attached');
@@ -42,7 +43,7 @@ test('concurrent resizes settle the window AND the attached client at the LAST r
       // One "drag": 60 frames, each a different size, fired without awaiting — what the bridge does.
       const sizes = []; for (let i = 0; i < 60; i++) sizes.push({ cols: 60 + i, rows: 20 + (i % 7) });
       const last = sizes[sizes.length - 1];
-      await Promise.all(sizes.map((s) => T.resize(id, s.cols, s.rows)));
+      await Promise.all(sizes.map((s) => attachment.resize(s.cols, s.rows)));
       await sleep(250);   // the client reports its new pty size to the server on SIGWINCH; give it a beat
       const want = `${last.cols}x${last.rows}`;
       const win = tmux(['display-message', '-p', '-t', id, '#{window_width}x#{window_height}']);
@@ -52,6 +53,7 @@ test('concurrent resizes settle the window AND the attached client at the LAST r
       for (const c of clients) assert.equal(c, want, `round ${round}: attached client ends at the last requested size`);
     }
   } finally {
+    attachment?.close();
     try { child && child.kill('SIGTERM'); } catch {}
     try { execFileSync('tmux', ['-L', sock, 'kill-server'], { stdio: 'ignore' }); } catch {}
     try { fs.rmSync(tmuxSocketFile(sock), { force: true }); } catch {}

@@ -2,122 +2,74 @@
 
 **Your working computer, from any screen.**
 
-[![Tests workflow status on main](https://github.com/buffbeefalo/scheme/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/buffbeefalo/scheme/actions/workflows/tests.yml?query=branch%3Amain) [![Secrets scan workflow status on main](https://github.com/buffbeefalo/scheme/actions/workflows/secrets-scan.yml/badge.svg?branch=main)](https://github.com/buffbeefalo/scheme/actions/workflows/secrets-scan.yml?query=branch%3Amain)
+[![Tests on main](https://github.com/buffbeefalo/scheme/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/buffbeefalo/scheme/actions/workflows/tests.yml?query=branch%3Amain) [![Secret scan on main](https://github.com/buffbeefalo/scheme/actions/workflows/secrets-scan.yml/badge.svg?branch=main)](https://github.com/buffbeefalo/scheme/actions/workflows/secrets-scan.yml?query=branch%3Amain)
 
-*Badges show GitHub's latest reported main-branch results; they can lag and are not publication approval.*
+Scheme puts your terminals and coding tools in a dashboard you can open from a browser. Your projects and processes stay on your own **working computer**; a laptop, second desktop, or phone provides the screen and keyboard. Start with a normal Shell, then add Claude Code, Codex, or a local model when you want one.
 
-Scheme puts a terminal and your coding tools in a dashboard you can open on a phone, tablet, laptop, or second desktop. The work runs on your own computer—such as a DGX Spark—while the other device shows the screen and sends your typing.
+**[Watch the product tour](https://buffbeefalo.github.io/scheme/#watch) · [Watch the complete setup](https://buffbeefalo.github.io/scheme/#setup) · [Read the setup guide](INSTALL-HOST.md) · [Download v1.1.0](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.0.zip)**
 
-![A phone and a desktop connect privately to Scheme on a working computer. Projects and coding tools stay on that working computer.](docs/architecture.svg)
+[![Scheme desktop dashboard with fictional demonstration sessions.](docs/images/scheme-desktop-demo.png)](https://buffbeefalo.github.io/scheme/#watch)
 
-**[Start the setup](INSTALL-HOST.md) · [Desktop guide](INSTALL-DESKTOP.md) · [Phone guide](INSTALL-MOBILE.md) · [Get help](TROUBLESHOOTING.md)**
+*Demonstration images use fictional example content. Staged AI output illustrates the interface; it is not a live provider response. The films include English captions, chapter links, and readable transcripts.*
 
-## New to this? Start here
+## One host, the screen you need
 
-You can try Scheme with a normal **Shell** terminal before installing an AI tool. Downloading the public project and trying Shell do not require a GitHub account or an AI account. Internet access is needed to download the software. Connecting through Tailscale and using cloud AI tools involve their own accounts.
+![A phone and a desktop connect privately to Scheme on a working computer. Projects and tools stay on that host.](docs/architecture.svg)
 
-1. **Set up your working computer.** Follow the [host guide](INSTALL-HOST.md). It shows how to download the ZIP, open the right folder, install the prerequisites, and start Scheme.
-2. **Try a harmless command.** In Scheme, press **＋ New**, choose **Shell**, then **Start**. Type `echo "Scheme is ready"` and press Enter. You should see **Scheme is ready** in the terminal.
-3. **Open it on another device.** Follow the [desktop guide](INSTALL-DESKTOP.md) or the [iPhone and Android guide](INSTALL-MOBILE.md). Both use a private Tailscale connection.
-4. **Add an AI tool when you want one.** The [optional AI setup](INSTALL-HOST.md#6-add-an-ai-tool-optional) explains Claude Code, Codex, and local models.
+- **Keep several sessions in reach.** Use Shell, Claude Code, Codex, or the Ollama local-model lane. Search sessions by their available labels, projects, requests, and recent activity.
+- **Read what your tools report.** See supported activity, context, file, and account information. Missing telemetry stays unknown; it is not treated as an idle tool or an unused account.
+- **Leave the browser and return.** Sessions continue on an awake host. A tested Linux service restart also preserved a running Shell; a host reboot creates a new process.
+- **Choose a comfortable view.** Auto, Light, and Dark themes adapt the surrounding dashboard. The terminal keeps its dark background so command output remains readable.
+- **Work with a smaller screen.** Touch keys, a readable terminal snapshot, and a separate writing area help on narrow touch layouts. Physical phone testing remains outside this release's validation.
+- **Bring in a file or follow a link.** Upload into the session's project and open supported tool links on the viewing device.
 
-If your second screen is a monitor plugged into the **same computer**, open <http://localhost:3000> there. A separate computer or phone needs the connection in step 3.
+The public application has **Terminal** and **Connect**. [The capability guide](CAPABILITIES.md) explains the controls, tool requirements, and recovery limits.
 
-## A few words you will see
+## Get your first Shell running
 
-| Word | What it means here |
+You do not need a GitHub account or an AI account to download Scheme and try Shell. The working computer needs Node.js 22 or newer, tmux 3.x, and `script`. Scheme itself has **no npm package dependencies and no build step**.
+
+1. **Prepare the working computer.** Follow the [host guide](INSTALL-HOST.md) to download the release, install its prerequisites, and run the setup check.
+2. **Start Scheme there.** Open <http://localhost:3000> on that same computer. On an 8 GiB host, follow the guide's [1 GiB memory-reserve setting](INSTALL-HOST.md#memory-on-smaller-hosts) before opening a tab.
+3. **Try Shell.** Press **＋ New**, choose **Shell**, then **Start**. Type `echo "Scheme is ready"` and press Enter. The output confirms that your browser reaches the host terminal.
+4. **Connect another screen.** Use the [desktop guide](INSTALL-DESKTOP.md) for SSH or Tailscale, or the [phone guide](INSTALL-MOBILE.md) for the private Tailscale route.
+
+If the second screen is a monitor plugged into the host, open the local dashboard there. A separate computer or phone needs a private connection; its own `localhost` address does not automatically reach the host.
+
+## What was tested for v1.1.0
+
+The setup was exercised on **two separate hosted graphical Ubuntu 24.04 ARM64 virtual machines**, each with 8 GiB of memory. One ran Scheme; the other viewed it through an SSH tunnel. Checks included the real Shell, browser closure and return, a Scheme service restart, and host reboot recovery. The smaller-host setup used `SYSMON_MEM_FLOOR_MB=1024`.
+
+Cloud AI sign-ins and a real Tailscale account connection were not part of those tests. macOS and WSL host instructions are provided, but remain unverified. Responsive browser checks are not physical iPhone or Android tests. [Read the complete validation scope](CAPABILITIES.md#validation-for-v110).
+
+## Keep the dashboard private
+
+**Anyone who can use your Scheme dashboard can run commands and access files as your host account.** Scheme has no separate login screen; SSH or your private Tailscale network controls access. Keep it on trusted devices and leave the server bound to `127.0.0.1`. Do not expose it with a router port forward, public reverse proxy, or Tailscale Funnel. [Security guidance](SECURITY.md).
+
+Closing a browser disconnects the screen while work can continue. Sleeping the host pauses progress. Rebooting loses running jobs and unsaved process state; reopening a saved tab or conversation does not restore that process. [Continuity explained](CAPABILITIES.md#continuity-what-survives).
+
+Cloud tools use your own accounts, access, and billing. Local models need their own memory and storage. “Self-hosted dashboard” does not mean every tool is offline: a tool can still call a cloud provider or access the network.
+
+## Find the right guide
+
+| You want to… | Start here |
 |---|---|
-| **Working computer / host** | The computer that stores your projects and runs Scheme and your tools. Keep it powered on and awake. |
-| **Viewing device** | The phone, tablet, or other computer where you open the dashboard. It needs a browser and a private connection; it does not need Node.js or an AI tool. |
-| **Terminal / Shell** | A place to type commands that the working computer carries out. Start with the harmless example above. |
-| **AI tool** | An optional assistant such as Claude Code or Codex that runs inside a terminal and can work with your project files. |
-| **Tailscale / tailnet** | Software that connects your devices privately. A “tailnet” is the private network belonging to your Tailscale account. |
-| **GitHub repository** | This project's folder of code and guides. The **Download ZIP** button gets a copy without using Git commands. |
-
-## What it does
-
-- Open several terminal tabs for Shell, Claude Code, Codex, or a local model through Ollama.
-- See available session information, including whether a tool is working or waiting for you, project changes, and resource use. Some tools or versions report more detail than others.
-- Reconnect after closing the browser while the working computer keeps the sessions running.
-- Use the touch key bar on a phone, or keep the dashboard open on another desktop.
-- Upload a file to a session's project and open a tool's links on your viewing device.
-
-The same web dashboard adapts to desktop and phone screens. No separate Scheme phone app is required.
-
-The **Telemetry** panel shows the last observed approval setting and, for Codex, a separately labelled sandbox mode. Codex `never` disables approval requests; restricted operations can still fail. Claude `bypassPermissions` bypasses runtime permission checks. A session can have approval prompts disabled while its sandbox stays read-only, and questions can remain pending. These observations can lag; **not reported** means the available session telemetry has no usable value, while unfamiliar values say **unrecognized**. They do not establish user authorization or remove filesystem, network, or other platform restrictions. On smaller screens, open **Tools**, press **◧** (Toggle telemetry), and use **×** to close the panel.
-
-## See the dashboard
-
-These are screenshots of Scheme with **fictional demonstration data**. They contain no live account, private project, or real agent conversation. The demonstration shows the interface; it is not evidence of a live AI response.
-
-![Scheme desktop dashboard with several demonstration sessions and an activity rail.](docs/images/scheme-desktop-demo.png)
-
-*Desktop: terminal tabs, session activity, and room to keep a project open on another screen.*
-
-<details>
-<summary>Phone layout and touch controls</summary>
-
-<img src="docs/images/scheme-mobile-demo.png" width="390" alt="Scheme phone demonstration with a terminal, session controls, and touch key bar.">
-
-The same dashboard fits a phone screen, with a touch key bar and bottom navigation. [Open the full phone screenshot](docs/images/scheme-mobile-demo.png).
-
-</details>
-
-<details>
-<summary>Choose Shell or an installed AI tool</summary>
-
-![Scheme New session picker showing Claude Code, Codex, Local LLM, and Shell.](docs/images/scheme-sessions-demo.png)
-
-Start with Shell, then choose an AI tool after installing it on the working computer.
-
-</details>
-
-<details>
-<summary>Follow file activity while a session works</summary>
-
-![Scheme demonstration with file activity in the side rail and an example diff printed in the terminal.](docs/images/scheme-changes-demo.png)
-
-The side rail lists reported file activity; the terminal shows a sample diff. This is not a separate graphical diff editor.
-
-</details>
-
-## What you need
-
-| On the working computer | On the viewing device |
-|---|---|
-| Node.js 22 or newer, tmux 3.x, and `script`. The [host guide](INSTALL-HOST.md) covers installation. | A current web browser. For the recommended remote connection, install Tailscale too. |
-| Linux has been tested. DGX Spark uses the Linux path. macOS and Windows through WSL2 have instructions, but still need host verification. | Windows, macOS, Linux, iPhone, iPad, or Android can act as the viewing device. Actual browser behavior can vary. |
-| An AI tool only if you want an AI session. Local models need substantial additional memory and disk space. | No Scheme server, Node.js, coding assistant, or local model installation. |
-
-Scheme has no npm package dependencies and no build step. Cloud tools use **your own** account, access, and billing; Scheme does not provide subscriptions or shared credentials. A downloaded local model runs on your hardware, with its own memory requirements. The tools you run can still access the internet.
-
-## Keep your connection private
-
-**Anyone who can use your Scheme dashboard can run commands and access files as your account on the working computer.** Use it on your own trusted devices. Scheme has no separate login screen: SSH or Tailscale supplies the access control.
-
-Leave Scheme listening on `127.0.0.1` and follow the private connection guides. Do not expose it through a router port forward, a public reverse proxy, or Tailscale Funnel. See [Security](SECURITY.md).
-
-Closing the browser disconnects the screen; it does not stop the work. Sleeping or shutting down the working computer stops progress. A reboot loses running processes. Scheme can attempt to reopen saved tabs and supported conversations after it starts again, but cannot restore running shell commands or unsaved process state. [Details and current recovery limits](TROUBLESHOOTING.md#after-a-disconnect-or-reboot).
-
-## More help
-
-| I want to… | Open this guide |
-|---|---|
-| Install Scheme or add my AI tools | [Working computer setup](INSTALL-HOST.md) |
+| Install Scheme and try your first terminal | [Working computer setup](INSTALL-HOST.md) |
+| Understand the controls and tool requirements | [Capabilities](CAPABILITIES.md) |
 | Use a second desktop or laptop | [Desktop connection](INSTALL-DESKTOP.md) |
 | Use an iPhone, iPad, or Android device | [Phone and tablet connection](INSTALL-MOBILE.md) |
 | Fix a setup or connection problem | [Troubleshooting](TROUBLESHOOTING.md) |
-| Change the port, project list, model, or memory reserve | [Configuration](CONFIGURATION.md) |
-| Report a bug or change the code | [Contributing](CONTRIBUTING.md) |
-| Check a release before sharing it | [Release checks](PUBLISHING.md) |
+| Change projects, ports, models, or memory settings | [Configuration](CONFIGURATION.md) |
+| Report an issue or contribute | [Contributing](CONTRIBUTING.md) |
+| Review source, films, or the public site before release | [Publication guide](PUBLISHING.md) |
 
-For readers already comfortable with Git, cloning is an alternative to the ZIP download:
+For readers comfortable with Git, cloning is an alternative to the ZIP:
 
 ```bash
-git clone https://github.com/buffbeefalo/scheme.git
+git clone --branch v1.1.0 https://github.com/buffbeefalo/scheme.git
 cd scheme
 bin/scheme-doctor
 bin/scheme
 ```
 
-Scheme is [MIT licensed](LICENSE).
+The badges reflect GitHub's latest reported main-branch checks; they can lag. Scheme is [MIT licensed](LICENSE).

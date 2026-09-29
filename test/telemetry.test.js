@@ -192,6 +192,37 @@ test('working: bookkeeping lines after a prompt do not reset the state', () => {
   assert.equal(t.working, true);
 });
 
+test('synthetic final and authentication errors end work without counting a model reply', () => {
+  for (const ending of [
+    { stop_reason: 'end_turn', isApiErrorMessage: true },
+    { stop_reason: null, isApiErrorMessage: true },
+    { stop_reason: 'end_turn', isApiErrorMessage: false },
+  ]) {
+    const t = analyzeTranscript([U_PROMPT, {
+      type: 'assistant', isApiErrorMessage: ending.isApiErrorMessage,
+      timestamp: '2026-09-29T12:00:01Z', uuid: 'synthetic-error',
+      message: { role: 'assistant', model: '<synthetic>', stop_reason: ending.stop_reason,
+        content: [{ type: 'text', text: 'Sign in required' }],
+        usage: { input_tokens: 0, output_tokens: 0 } },
+    }]);
+    assert.equal(t.working, false);
+    assert.equal(t.needsInput, false);
+    assert.equal(t.model, null);
+    assert.equal(t.tokens.context, 0);
+    assert.equal(t.turns, 0);
+    assert.equal(t.lastTurnId, null);
+  }
+});
+
+test('synthetic placeholders without a final stop do not erase active work', () => {
+  const t = analyzeTranscript([U_PROMPT, {
+    type: 'assistant', message: { role: 'assistant', model: '<synthetic>', stop_reason: null,
+      content: [{ type: 'text', text: 'No response requested.' }] },
+  }]);
+  assert.equal(t.working, true);
+  assert.equal(t.model, null);
+});
+
 test('working: a tool_result with no follow-up assistant message yet = still working', () => {
   const t = analyzeTranscript([A_TOOL, U_RESULT]);
   assert.equal(t.working, true);
@@ -282,9 +313,9 @@ test('needsInput: only the LATEST ask state counts (answered earlier, asking now
   assert.equal(t.needsInputKind, 'plan');
 });
 
-test('needsInput: empty transcript defaults to not-needed', () => {
+test('needsInput: empty transcript remains unknown', () => {
   const t = analyzeTranscript('');
-  assert.equal(t.needsInput, false);
+  assert.equal(t.needsInput, null);
   assert.equal(t.needsInputKind, null);
 });
 

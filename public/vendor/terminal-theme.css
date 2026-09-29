@@ -1,0 +1,58 @@
+/* The page and controls share one resolved theme. The terminal keeps its own dark
+ * ANSI palette in both modes, supplied to xterm in terminal-ui.js. */
+:root {
+  color-scheme: light;
+  --bg-rgb: 238,227,205; --s2-rgb: 247,240,224; --ink-rgb: 29,43,31;
+  --shadow-rgb: 29,43,31; --sage-rgb: 185,217,196; --lime-rgb: 191,234,75;
+  --field: #f8f0dd; --on-accent: #fff;
+  --mut: #4b594b; --dim: #4d5b4d; --faint: #505d50; --amber2: #804c12;
+  --prov-claude: #8f2f4c; --prov-codex: #0b5f68;
+  --red2: #982a14; --violet2: #5f4a95;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #ece5d4; --bg: #131a14; --s1: #18211a; --s2: #1c261e; --s3: #26322a;
+  --line: rgba(236,229,212,.13); --line2: rgba(236,229,212,.24); --line3: rgba(236,229,212,.4);
+  --txt: #ece5d4; --mut: #c4bfae; --dim: #b3b09f; --faint: #afae9d;
+  --amber: #e5a650; --amber2: #f0bb6e; --amberd: #c08a3e;
+  --cyan: #86a8ff; --cyan2: #a6bfff; --green: #6fc28f; --green2: #93d7ab;
+  --red: #ff8b70; --red2: #ffa08a; --yellow: #e8c25e; --violet: #b9a3f2; --violet2: #cbbaf6;
+  --lime: #9fc43a; --sage: #2b4535;
+  --bg-rgb: 19,26,20; --s2-rgb: 28,38,30; --ink-rgb: 236,229,212;
+  --shadow-rgb: 0,0,0; --sage-rgb: 43,69,53; --lime-rgb: 74,100,20;
+  --field: #0f1510; --on-accent: #10170f;
+  --prov-claude: #ef8fae; --prov-codex: #5fd0da;
+}
+[data-rt="claude"] { --rt-ink: #8f2f4c; }
+[data-rt="codex"] { --rt-ink: #0b5f68; }
+[data-rt="local"] { --rt-ink: #4f5b14; }
+[data-rt="shell"] { --rt-ink: #4a534a; }
+:root[data-theme="dark"] [data-rt="claude"] { --rt: #ef8fae; --rt-soft: rgba(239,143,174,.5); --rt-ink: #ef8fae; }
+:root[data-theme="dark"] [data-rt="codex"] { --rt: #5fd0da; --rt-soft: rgba(95,208,218,.5); --rt-ink: #5fd0da; }
+:root[data-theme="dark"] [data-rt="local"] { --rt: #c2d45a; --rt-soft: rgba(194,212,90,.5); --rt-ink: #c2d45a; }
+:root[data-theme="dark"] [data-rt="shell"] { --rt: #b4bdb2; --rt-soft: rgba(180,189,178,.45); --rt-ink: #b4bdb2; }
+::placeholder { color: var(--dim); opacity: 1; }
+.cd-usagegrp.claude .prov { color: var(--prov-claude); }
+.cd-usagegrp.codex .prov { color: var(--prov-codex); }
+.cd-well .cd-rt-chip, .cd-bar .cd-sess .cd-rtag { color: var(--rt-ink, var(--mut)); }
+.need-send, .cd-bar .cd-sess .cd-x:hover, .cd-copyall.done { color: var(--on-accent); }
+.cd-jump { color: #17211a; }
+.cd-host { color-scheme: dark; }
+.cd-modal { background: rgba(var(--shadow-rgb), .5); }
+.cd-pop, .cd-switcher, .cd-copypanel { box-shadow: 0 16px 38px rgba(var(--shadow-rgb), .25); }
+.cd-copypanel { color-scheme: light; }
+:root[data-theme="dark"] .cd-copypanel { color-scheme: dark; }
+:root[data-theme="dark"] button.sw[aria-checked="true"] { background: #2f7d52; border-color: #6fc28f; }
+#cd-create kbd { color: inherit; background: transparent; border-color: currentColor; }
+.theme-picker { display: inline-flex; align-items: center; gap: 6px; color: var(--mut); font: 500 12px var(--ui); white-space: nowrap; }
+.theme-picker select { min-height: 32px; max-width: 95px; padding: 4px 7px; border: 1px solid var(--line2); border-radius: 8px; background: var(--s2); color: var(--txt); font: inherit; cursor: pointer; }
+.theme-tools { display: none; }
+@media (max-width: 1200px) { .theme-tools { display: inline-flex; } }
+@media (max-width: 700px) {
+  header > .theme-picker { margin-left: auto; }
+  header .hstats { display: none; }
+  .theme-picker select { min-height: 44px; font-size: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

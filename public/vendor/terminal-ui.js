@@ -2,8 +2,8 @@
 /* Command Deck — full-screen terminal cockpit (Claude Code / Codex / local LLM / plain shell). GROUND-UP REBUILD (2026-06-02).
  *
  * Layout is pure CSS: on the terminal tab <body> is a viewport-height flex column
- * (body.term-tab) — nav on top, the xterm fills the rest. No height calc(), no JS
- * height: flexbox derives the size from the real viewport, so it can't be wrong.
+ * (body.term-tab) — nav on top, the xterm fills the rest. The mobile workspace supplies
+ * the visual viewport height while the soft keyboard is open; flexbox sizes the children.
  *
  * Sizing the TUI is driven by a ResizeObserver on the screen container — the one trigger
  * guaranteed to fire when the element actually has a size — plus a fit when the socket
@@ -21,7 +21,7 @@
   // The page supplies the host's home directory after connect-info arrives. Read it lazily;
   // the generic display fallback is only used before that host information is available.
   const homeDir = () => (document.documentElement.dataset && document.documentElement.dataset.home) || '/home/you';
-  const tilde = (p) => String(p || '').replace(homeDir(), '~');
+  const tilde = (p) => { const path = String(p || ''), home = homeDir(); return path === home ? '~' : path.startsWith(home + '/') ? '~' + path.slice(home.length) : path; };
   const enc = encodeURIComponent;
 
   async function api(method, path, body) {
@@ -117,11 +117,22 @@
   let active = null, booted = false, els = {}, screenRO = null, dragged = null, dragPaintQueued = false, creatingSession = false, launchCommitted = false;
   let scrollDrag = false, lastHist = 0, scrollPoll = null, lastGoto = 0, pendingWheel = 0, wheelRaf = null, scrollPostInFlight = false, lastPos = 0, telPoll = null, scrollInFlight = false, telInFlight = false, telQueued = false, telTick = 0;
   let usagePoll = null, usageInFlight = false, lastAccountUsage = null, usageUpdateFailed = false;
+  let followActiveTab = true, laneFitFrame = null, laneRO = null;
   let lastLightsAt = -1e9, lastLightsMap = null;
-  // Touch devices (phone/tablet) default smaller + railless so the TUI gets the columns;
-  // explicit user choices (A−/A+, rail toggle) persist per-device and win over these.
-  const COARSE = matchMedia('(pointer:coarse)').matches;
-  let fontSize = Number(localStorage.getItem('cd-font')) || (COARSE ? 11 : 13);
+  // Coarse pointers avoid automatic terminal focus and default to a hidden rail.
+  // Phone and desktop zoom persist separately, including when a foldable changes width.
+  const coarsePointer = matchMedia('(pointer:coarse)');
+  const phoneLayout = matchMedia('(max-width:700px) and (pointer:coarse)');
+  const fontSizes = { phone: 16, desktop: 13 };
+  try {
+    fontSizes.phone = Math.min(22, Math.max(8, Number(localStorage.getItem('cd-phone-font')) || 16));
+    fontSizes.desktop = Math.min(22, Math.max(8, Number(localStorage.getItem('cd-font')) || 13));
+  } catch (_) {}
+  let fontSize = fontSizes[phoneLayout.matches ? 'phone' : 'desktop'], workspace = null;
+  phoneLayout.addEventListener('change', () => {
+    fontSize = fontSizes[phoneLayout.matches ? 'phone' : 'desktop'];
+    applyFont();
+  });
 
   function cache() {
     els = {
@@ -155,6 +166,7 @@
           : rt === 'shell' ? { glyph: '>_', label: 'Shell', title: 'plain terminal (bare shell — no agent)' }
             : { glyph: '✱', label: 'Claude', title: 'Claude Code (cloud · Anthropic)' };
       els.studio.dataset.rt = rt;
+      if (els.prevInput) els.prevInput.disabled = rt === 'shell';
       if (chip) {
         chip.querySelector('.g').textContent = meta.glyph;
         chip.querySelector('.lbl').textContent = meta.label;
@@ -170,7 +182,7 @@
 
   async function activate() {
     if (!booted) { booted = true; cache(); wire(); await boot(); return; }
-    requestAnimationFrame(refit);   // returning to the tab — re-assert our size to this window
+    requestAnimationFrame(() => refit(true));   // returning to the tab — re-assert our size to this window
     refreshAccountUsage();
   }
 
@@ -180,7 +192,7 @@
     els.lock.style.display = 'none'; els.studio.style.display = 'flex';
     try {
       const railPref = localStorage.getItem('cd-rail-off');
-      if (railPref === '1' || (COARSE && railPref == null)) els.studio.classList.add('rail-off');
+      if (railPref === '1' || (coarsePointer.matches && railPref == null)) els.studio.classList.add('rail-off');
     } catch (_) {}
     // ONE ResizeObserver on the screen drives the fit for whichever session is active. It
     // fires when the container first gets a real size AND on every later change — bulletproof.
@@ -198,7 +210,7 @@
     startUsagePoll();
   }
 
-  function refit() { const s = active && S.get(active); if (s && s.opened) fit(s); }
+  function refit(force = false) { const s = active && S.get(active); if (s && s.opened) fit(s, force === true); }
 
   // ── sessions ────────────────────────────────────────────────────────────────────
   // Register meta only; the heavy xterm+socket is built lazily on first activate (below).
@@ -210,15 +222,14 @@
     paint();
   }
   function register(meta) {
-    // status starts 'live': the session list only ever contains LIVE tmux sessions, so an
-    // unattached (never-clicked) tab is green, not grey — 'connecting/reconnecting' are
-    // attach-socket states and only apply once the tab has been opened.
+    // The list proves the session exists. Agent activity remains unknown until
+    // telemetry establishes it; connecting/reconnecting describe opened sockets only.
     // Restore the persisted "seen" turn so a done-glow earned before a refresh isn't wiped: with a
     // saved value we treat the baseline as already established (seenInit), so the first poll flags
     // attn iff the latest completed turn is newer than what the user last acknowledged.
     const seen = loadSeen()[meta.id] || null;
     const s = { id: meta.id, name: meta.name || meta.id, cwd: meta.cwd || '', createdAt: meta.createdAt || null, local: !!meta.local, localModel: meta.localModel || null, codex: !!meta.codex, codexModel: meta.codexModel || null, shell: !!meta.shell, term: null, fit: null, ws: null, pending: null, el: null, opened: false, status: 'live', userClosed: false, lastTurnId: null, seenTurnId: seen, seenInit: !!seen, working: false, lifecycleKnown: false, attn: false, needsInput: false, needsInputKind: null, waiting: false, lightsErr: false, telemetryUnknown: false,
-      stateSince: null, lastActivity: null, contextTokens: null, contextWindow: null, modelShort: null };
+      stateSince: null, lastActivity: null, contextTokens: null, contextWindow: null, modelShort: null, ask: null, where: null, lastAction: null, lastActionAt: null, task: null };
     S.set(meta.id, s); return s;
   }
   // ── identity ────────────────────────────────────────────────────────────────
@@ -282,29 +293,39 @@
     if (!Number.isFinite(s.contextWindow) || s.contextWindow <= 0) return n;
     return n + ' · ' + Math.round((s.contextTokens / s.contextWindow) * 100) + '%';
   }
-  const stateOf = (s) => (s.needsInput ? 'needs-input' : s.waiting ? 'waiting' : s.working ? 'busy' : 'idle');
-  const STATE_RANK = { 'needs-input': 4, waiting: 3, busy: 2, idle: 1 };
+  const stateOf = (s) => {
+    if (s.status !== 'live') return s.status === 'connecting' ? 'connecting' : 'offline';
+    if (rtOf(s) === 'shell') return 'connected';
+    if (s.lightsErr) return 'unknown';
+    if (s.needsInput === true) return 'needs-input';
+    if (s.waiting === true) return 'waiting';
+    if (!s.lifecycleKnown) return 'unknown';
+    return s.working === true ? 'busy' : s.working === false ? 'idle' : 'unknown';
+  };
+  const STATE_RANK = { 'needs-input': 7, waiting: 6, busy: 5, offline: 4, connecting: 3, unknown: 2, idle: 1, connected: 1 };
 
   function paint() {
     if (dragged) { dragPaintQueued = true; return; }   // a telemetry repaint mid-drag would destroy the dragged DOM
     recomputeLabels();
     els.sessions.innerHTML = '';
     for (const s of S.values()) {
+      const st = stateOf(s), showAttention = s.attn && st === 'idle';
       // Light priority: needs-input (cyan, blocked on YOU) > waiting (violet, idle but a spawned
       // subagent/workflow is still running) > busy (amber, actively generating) > idle (green).
-      const stateCls = (s.needsInput ? ' needs-input' : (s.waiting ? ' waiting' : (s.working ? ' busy' : '')))
+      const stateCls = (['needs-input', 'waiting', 'busy'].includes(st) ? ' ' + st : '')
         + (s.telemetryUnknown ? ' telemetry-unknown' : '')
         + (s.telemetryUnknown && !s.lifecycleKnown ? ' lifecycle-unknown' : '');
-      const row = elc('div', 'cd-sess st-' + s.status + stateCls + (s.attn ? ' attn' : '') + (s.id === active ? ' active' : ''));
+      const row = elc('div', 'cd-sess st-' + s.status + stateCls + (showAttention ? ' attn' : '') + (s.id === active ? ' active' : ''));
+      row.dataset.state = st;
       row.draggable = true; row.dataset.id = s.id;
       row.setAttribute('role', 'tab'); row.setAttribute('aria-controls', 'cd-host');
       row.setAttribute('aria-selected', s.id === active ? 'true' : 'false'); row.setAttribute('aria-keyshortcuts', 'Delete');
       row.tabIndex = s.id === active ? 0 : -1;
       row.dataset.rt = rtOf(s);
       const rt = rtOf(s);
-      if (s.needsInput) row.dataset.needs = s.needsInputKind || 'question';
-      const needLabel = s.needsInput ? '⚠ NEEDS YOUR INPUT (' + (s.needsInputKind === 'plan' ? 'approve plan' : 'pick an option') + ') · '
-        : (s.waiting ? '◴ waiting on a subagent/workflow · ' : (s.telemetryUnknown ? '◇ telemetry partial · ' : ''));
+      if (st === 'needs-input') row.dataset.needs = s.needsInputKind || 'question';
+      const needLabel = st === 'needs-input' ? '⚠ NEEDS YOUR INPUT (' + (s.needsInputKind === 'plan' ? 'approve plan' : 'pick an option') + ') · '
+        : STATE_TEXT[st] + ' · ';
       // Explicit automation overrides retain their short suffix; an unpinned tab is honestly
       // labelled backend default until live telemetry identifies the actual model.
       const brainFull = s.localModel || 'backend default';
@@ -318,7 +339,7 @@
       const tag = rt === 'local' ? brainTag : codexTag;
       const rtTitle = RT_META[rt].title(model);
       const shown = labelOf(s);
-      row.title = needLabel + rtTitle + ' · double-click to rename · drag to reorder · ' + (tilde(s.cwd) || 'claude');
+      row.title = needLabel + rtTitle + ' · double-click to rename · drag to reorder · ' + (s.where ? 'working in ' + tilde(s.where.path) : (tilde(s.cwd) || 'claude'));
       row.setAttribute('aria-label', needLabel + shown + ' · ' + rtTitle + ' · Delete closes session');
       const runtimeTag = RT_META[rt].tag(modelEsc, tag);
       row.innerHTML = `<span class="cd-dot"></span><span class="nm">${esc(shown)}</span>${runtimeTag}<span class="cd-x" aria-hidden="true" title="close / delete this session">✕</span>`;
@@ -344,6 +365,8 @@
       els.sessions.appendChild(row);
     }
     measureLane();
+    keepActiveTabVisible();
+    refreshSwitcherStates();
   }
 
   // ── lane overflow ───────────────────────────────────────────────────────────
@@ -373,7 +396,7 @@
         const st = stateOf(s);
         if (!agg || STATE_RANK[st] > STATE_RANK[agg]) agg = st;
       }
-      if (agg && agg !== 'idle') els.countBtn.dataset.agg = agg; else delete els.countBtn.dataset.agg;
+      if (agg && agg !== 'idle' && agg !== 'connected') els.countBtn.dataset.agg = agg; else delete els.countBtn.dataset.agg;
     }
     const laneR = els.lane.getBoundingClientRect();
     els.lane.style.setProperty('--fade-l', Math.max(0, Math.round(r.left - laneR.left)) + 'px');
@@ -395,6 +418,13 @@
       els.laneThumb.style.transform = 'translateX(' + Math.max(0, Math.min(tw - w, x)) + 'px)';
     }
   }
+  function keepActiveTabVisible() {
+    if (laneFitFrame || !followActiveTab || !active || dragged) return;
+    laneFitFrame = requestAnimationFrame(() => {
+      laneFitFrame = null;
+      if (followActiveTab && els.view.classList.contains('active')) scrollPillIntoView(active);
+    });
+  }
   function scrollPillIntoView(id) {
     const el = els.sessions && els.sessions.querySelector(`[data-id="${id}"]`);
     if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -404,10 +434,48 @@
   // Lives OUTSIDE #cd-sessions on purpose: paint() rebuilds that list wholesale every 2s, which
   // would destroy an open dialog mid-keystroke. #cd-sessions stays the one canonical tablist.
   let swOpen = false, swSel = 0, swRows = [], swReturnFocus = null;
-  const STATE_TEXT = { 'needs-input': 'needs you', waiting: 'waiting', busy: 'working', idle: 'idle' };
+  const STATE_TEXT = { 'needs-input': 'needs you', waiting: 'waiting', busy: 'working', idle: 'idle',
+    unknown: 'activity unknown', connecting: 'connecting', offline: 'offline · reconnecting', connected: 'connected' };
   function swMatches(s, q) {
     if (!q) return true;
-    return (labelOf(s) + ' ' + s.name + ' ' + s.id + ' ' + (s.cwd || '')).toLowerCase().includes(q);
+    return [labelOf(s), s.name, s.id, s.cwd, whereText(s), s.where?.path, s.where?.also?.path,
+      s.ask, s.task?.sentence, s.lastAction].filter(Boolean).join(' ').toLowerCase().includes(q);
+  }
+  // WHERE a tab is working — derived server-side from what it edited, read and ran (lib/tab-focus.js),
+  // so launch folders need not stand in for observed project work. Missing evidence stays visible.
+  function whereText(s) {
+    const w = s.where;
+    if (!w || !w.label) return '';
+    return w.label + (w.also && w.also.label ? ' + ' + w.also.label : '');
+  }
+  // The two lines that answer "what is this tab doing, and where": project folder, then the latest
+  // thing you asked it. Built as one fragment so the open dialog can refresh them in place.
+  function focusLines(s) {
+    if (rtOf(s) === 'shell') return `<span class="sw-where" title="${esc(s.cwd)}">Folder ${esc(tilde(s.cwd) || 'unavailable')}</span>`;
+    // One plain sentence of what the tab is FOR (its /goal, else the request it opened with).
+    const task = s.task && s.task.sentence
+      ? `<span class="sw-task" title="${esc(s.task.from === 'goal' ? 'From the tab\'s active goal' : 'From the request the tab opened with')}"><b>Task</b> ${esc(s.task.sentence)}</span>`
+      : '';
+    const wt = whereText(s);
+    const where = wt
+      ? `<span class="sw-where" title="${esc(tilde(s.where.path))}">📁 ${esc(wt)}</span>`
+      : `<span class="sw-where none">📁 no project folder yet</span>`;
+    const ask = s.ask
+      ? `<span class="sw-ask" title="${esc(s.ask)}"><b>Asked</b> ${esc(s.ask)}</span>`
+      : `<span class="sw-ask none"><b>Asked</b> latest request not in recent history</span>`;
+    // History, not a claim about this instant — so it is labelled "Last" and carries its age.
+    const age = sinceText(s.lastActionAt);
+    const act = s.lastAction
+      ? `<span class="sw-act" title="${esc(s.lastAction)}"><b>Last</b> ${esc(s.lastAction)}${age === '—' ? '' : ' · ' + esc(age) + ' ago'}</span>`
+      : '';
+    return task + where + ask + act;
+  }
+  function switcherMeta(s) {
+    const runtime = { claude: 'Claude', codex: 'Codex', local: 'Local', shell: 'Shell' }[rtOf(s)];
+    const age = Number.isFinite(s.createdAt) ? ageText(Date.now() - s.createdAt) : '—';
+    return [runtime + (s.modelShort ? ' ' + esc(s.modelShort) : ''), 'open ' + esc(age),
+      'last activity ' + esc(sinceText(s.lastActivity)), 'context ' + esc(ctxText(s))]
+      .concat(s.telemetryUnknown ? ['partial telemetry'] : []).join(' · ');
   }
   function renderSwitcher() {
     if (!els.swList) return;
@@ -415,32 +483,23 @@
     const all = Array.from(S.values());
     // Canonical order, except anything blocked on YOU is lifted to the top.
     const list = all.filter((s) => swMatches(s, q));
-    list.sort((a, b) => (b.needsInput ? 1 : 0) - (a.needsInput ? 1 : 0));
+    list.sort((a, b) => (stateOf(b) === 'needs-input' ? 1 : 0) - (stateOf(a) === 'needs-input' ? 1 : 0));
     swRows = list;
     if (els.swN) els.swN.textContent = q ? `${list.length} of ${all.length}` : `${all.length} sessions`;
     if (!list.length) { els.swList.innerHTML = '<div class="cd-sw-empty">No session matches that search.</div>'; return; }
     els.swList.innerHTML = list.map((s, i) => {
-      const st = stateOf(s), rt = rtOf(s);
-      const age = ageText(Date.now() - (s.createdAt || 0));
-      const glyph = rt === 'claude' ? '✱' : rt === 'codex' ? '⌥' : rt === 'local' ? '⌂' : '>_';
-      // Every fact is labelled, because three durations sit side by side here and an unlabelled
-      // number is the fastest way to read one as another.
-      const meta = [
-        glyph + (s.modelShort ? ' ' + esc(s.modelShort) : ''),
-        'open ' + esc(age),
-        'last ' + esc(sinceText(s.lastActivity)),
-        esc(ctxText(s)),
-      ].concat(s.telemetryUnknown ? ['partial telemetry'] : []).join(' · ');
-      return `<button type="button" class="cd-sw-row${i === swSel ? ' sel' : ''}" role="option" data-id="${esc(s.id)}"
+      const st = stateOf(s), meta = switcherMeta(s);
+      return `<button type="button" class="cd-sw-row${i === swSel ? ' sel' : ''}" role="option" tabindex="-1" data-id="${esc(s.id)}"
         aria-selected="${s.id === active ? 'true' : 'false'}">
         <span class="cd-dot" data-s="${st}"></span>
         <span class="sw-body">
           <span class="sw-top">
             <span class="sw-nm">${esc(labelOf(s))}</span>
-            ${s.attn ? '<span class="sw-attn">new</span>' : ''}
+            <span class="sw-attn"${s.attn && st === 'idle' ? '' : ' hidden'}>new</span>
             <span class="sw-state" data-s="${st}">${STATE_TEXT[st]}</span>
-            <span class="sw-dur">· ${esc(sinceText(s.stateSince))}</span>
+            <span class="sw-dur">· ${esc(sinceText(['busy', 'idle', 'needs-input', 'waiting'].includes(st) ? s.stateSince : null))}</span>
           </span>
+          <span class="sw-focus">${focusLines(s)}</span>
           <span class="sw-meta">${meta}</span>
         </span>
       </button>`;
@@ -449,6 +508,33 @@
       el.onclick = () => { setActive(el.dataset.id); closeSwitcher(); };
       el.onmouseenter = () => { swSel = i; markSwSel(); };
     });
+  }
+  function refreshSwitcherStates() {
+    if (!swOpen || !els.swList) return;
+    const query = (els.swQ?.value || '').trim().toLowerCase();
+    const matching = [...S.values()].filter(s => swMatches(s, query));
+    if (matching.length !== swRows.length || matching.some(s => !swRows.some(row => row.id === s.id))) {
+      const selected = swRows[swSel]?.id;
+      renderSwitcher();
+      const index = swRows.findIndex(s => s.id === selected);
+      swSel = index >= 0 ? index : 0;
+      markSwSel();
+    }
+    for (const row of els.swList.querySelectorAll('.cd-sw-row')) {
+      const s = S.get(row.dataset.id);
+      if (!s) continue;
+      const st = stateOf(s), label = row.querySelector('.sw-state');
+      row.setAttribute('aria-selected', String(s.id === active));
+      row.querySelector('.sw-nm').textContent = labelOf(s);
+      row.querySelector('.cd-dot').dataset.s = st;
+      label.dataset.s = st; label.textContent = STATE_TEXT[st];
+      row.querySelector('.sw-attn').hidden = !(s.attn && st === 'idle');
+      row.querySelector('.sw-dur').textContent = '· ' + sinceText(['busy', 'idle', 'needs-input', 'waiting'].includes(st) ? s.stateSince : null);
+      const focus = row.querySelector('.sw-focus'), html = focusLines(s);
+      if (focus && focus.innerHTML !== html) focus.innerHTML = html;
+      const meta = row.querySelector('.sw-meta'), details = switcherMeta(s);
+      if (meta.innerHTML !== details) meta.innerHTML = details;
+    }
   }
   function markSwSel() {
     Array.from(els.swList.querySelectorAll('.cd-sw-row')).forEach((el, i) => el.classList.toggle('sel', i === swSel));
@@ -476,6 +562,7 @@
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeSwitcher(); return; }
     if (e.key === 'Enter') {
       e.preventDefault(); e.stopPropagation();
+      if (e.target === els.swClose) { closeSwitcher(); return; }
       const s = swRows[swSel]; if (s) { setActive(s.id); closeSwitcher(); }
       return;
     }
@@ -521,7 +608,7 @@
     paint();
     api('POST', '/api/term/reorder', { ids });
   }
-  function setStatus(s, st) { s.status = st; paint(); }
+  function setStatus(s, st) { s.status = st; paint(); if (workspace) workspace.sync(); }
 
   // Send a keystroke / data chunk to a session's PTY. If the socket isn't OPEN yet — a freshly
   // activated tab still mid-handshake (e.g. the tab auto-selected right after a /handoff), or a
@@ -576,7 +663,7 @@
   function ensureOpen(s) {
     if (s.opened) return;
     const el = elc('div', 'cd-term'); els.host.appendChild(el); s.el = el;   // el is in the visible screen
-    const term = new window.Terminal({ fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize, lineHeight: 1.15, theme: { ...THEME, cursor: RT_META[rtOf(s)].cursor }, cursorBlink: true, scrollback: 8000, allowProposedApi: true, linkHandler: { activate(_e, uri) { openUrl(uri); }, allowNonHttpProtocols: false } });
+    const term = new window.Terminal({ fontFamily: "'IBM Plex Mono', ui-monospace, Menlo, monospace", fontSize, lineHeight: workspace.isPhone() ? 1.35 : 1.15, theme: { ...THEME, cursor: RT_META[rtOf(s)].cursor }, cursorBlink: true, scrollback: 8000, allowProposedApi: true, linkHandler: { activate(_e, uri) { openUrl(uri); }, allowNonHttpProtocols: false } });
     const fitAddon = new window.FitAddon.FitAddon(); term.loadAddon(fitAddon);
     term.open(el);
     wireLinks(term);   // plain http(s) URLs → clickable (open in a new tab)
@@ -591,6 +678,9 @@
     connect(s);
   }
   function setActive(id) {
+    followActiveTab = true;
+    pendingWheel = 0; lastHist = 0; lastPos = 0;
+    if (wheelRaf) { cancelAnimationFrame(wheelRaf); wheelRaf = null; }
     active = id;
     try { localStorage.setItem('cd-active', id); } catch (_) {}              // restore THIS tab (not tab #1) after a refresh
     const s = S.get(id);
@@ -600,7 +690,8 @@
     if (s) { ensureOpen(s); s.attn = false; s.seenTurnId = s.lastTurnId; saveSeen(s.id, s.lastTurnId); }   // viewing a tab clears + acknowledges its "done" flag
     for (const o of S.values()) if (o.el) o.el.style.display = (o.id === id) ? 'block' : 'none';
     els.empty.style.display = s ? 'none' : 'flex';
-    if (s) requestAnimationFrame(() => { fit(s); s.term.focus(); });
+    if (workspace) workspace.sync();
+    if (s) requestAnimationFrame(() => { fit(s, true); if (!coarsePointer.matches && !workspace?.isEditing()) s.term.focus(); });
     paint();
     requestAnimationFrame(() => scrollPillIntoView(id));   // switching must never leave the active pill off-screen
     pollTelemetry();
@@ -609,11 +700,14 @@
   function connect(s) {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const ws = new WebSocket(`${proto}://${location.host}/api/term/attach?id=${enc(s.id)}`);
-    ws.binaryType = 'arraybuffer'; s.ws = ws; setStatus(s, 'connecting');
+    ws.binaryType = 'arraybuffer'; s.ws = ws; s.sentSize = null; setStatus(s, 'connecting');
     ws.onopen = () => {
       setStatus(s, 'live'); fit(s);
       flushPending(s);                                                          // deliver keys typed while connecting
-      if (s.id === active && s.term) { try { s.term.focus(); } catch (_) {} }   // assert focus once the pane can receive input
+      if (!coarsePointer.matches && s.id === active && s.term && !workspace?.isEditing()
+        && !/^(INPUT|TEXTAREA|BUTTON)$/.test(document.activeElement?.tagName || '')) {
+        try { s.term.focus(); } catch (_) {}
+      }
     };
     // The tab busy/done dots come from the TRANSCRIPT (see pollTelemetry), NOT these bytes: tmux's
     // screen-replay on every (re)attach is bytes-but-not-work, and no byte-timing heuristic can
@@ -623,18 +717,28 @@
     ws.onerror = () => { try { ws.close(); } catch (_) {} };
   }
   // Fit xterm to its container, mirror the size to tmux, and show it in the bar.
-  function fit(s) {
-    if (!s || !s.opened) return;
+  function fit(s, force = false) {
+    if (!s || !s.opened || s.id !== active || document.hidden || !els.view.classList.contains('active')) return;
+    const lineHeight = workspace.isPhone() ? 1.35 : 1.15;
+    if (s.term.options.lineHeight !== lineHeight) s.term.options.lineHeight = lineHeight;
     try { s.fit.fit(); } catch (_) {}
     if (s.id === active && s.term) els.dims.textContent = s.term.cols + '×' + s.term.rows;
-    if (s.ws && s.ws.readyState === 1 && s.term) s.ws.send(JSON.stringify({ t: 'r', c: s.term.cols, r: s.term.rows }));
+    if (s.ws && s.ws.readyState === 1 && s.term) {
+      const size = s.term.cols + 'x' + s.term.rows;
+      if (force === true || s.sentSize !== size) {
+        s.ws.send(JSON.stringify({ t: 'r', c: s.term.cols, r: s.term.rows }));
+        s.sentSize = size;
+      }
+    }
   }
   function destroy(id) {
     const s = S.get(id); if (!s) return;
     s.userClosed = true; try { s.ws && s.ws.close(); } catch (_) {}
     try { s.term && s.term.dispose(); } catch (_) {} if (s.el) s.el.remove(); S.delete(id);
     window.CommandDeckAttach && window.CommandDeckAttach.dropSession(id);
+    if (workspace) workspace.dropSession(id);
     if (active === id) { active = null; const next = S.keys().next().value; if (next) setActive(next); else { applyRt(); setTok(null); renderRail(null); els.empty.style.display = 'flex'; els.dims.textContent = ''; } }
+    if (workspace) workspace.sync();
     paint();
   }
 
@@ -703,9 +807,10 @@
 
   // ── font zoom + activity dots ─────────────────────────────────────────────────────
   function applyFont() {
+    fontSizes[phoneLayout.matches ? 'phone' : 'desktop'] = fontSize;
     for (const s of S.values()) if (s.term) { try { s.term.options.fontSize = fontSize; } catch (_) {} }
     refit();
-    try { localStorage.setItem('cd-font', String(fontSize)); } catch (_) {}
+    try { localStorage.setItem(phoneLayout.matches ? 'cd-phone-font' : 'cd-font', String(fontSize)); } catch (_) {}
   }
 
   // ── scrollbar + jump-to-latest (scrollback lives in tmux; we drive copy-mode via the server) ──
@@ -980,6 +1085,15 @@
       tickAgos();
       return;
     }
+    // The server found no transcript/rollout for this tab (started:false): every agent field below
+    // would be a default, not an observation — say what is missing and show only runtime-neutral rows.
+    if (tel.notStarted) {
+      setRailHTML('<div class="seg"><div class="cd-kv"><span>runtime</span><b>' + (isCodex ? 'Codex' : tel.runtime === 'local' ? 'local model' : 'Claude') + '</b></div>'
+        + '<div class="cd-kv"><span>state</span><b style="color:var(--mut)">' + (isCodex ? 'conversation log not located yet' : 'no transcript yet') + '</b></div>'
+        + gitRow + loadRow + '</div>');
+      tickAgos();
+      return;
+    }
     parts.push('<div class="seg">'
       + '<div class="cd-kv"><span>model</span><b>' + esc(model) + (isCodex ? ' <span style="color:var(--mut);font-weight:400">· codex</span>' : '') + '</b></div>'
       + modeRow
@@ -991,7 +1105,9 @@
     const ctx = t.context || 0, WIN = tel.contextWindow || null;
     const caps = '<div class="cd-meter-cap"><span>' + fmtTok(ctx) + ' ctx</span><span>' + fmtTok(t.input || 0) + ' in · ' + fmtTok((t.cacheRead || 0) + (t.cacheCreate || 0)) + ' cache</span></div>'
       + '<div class="cd-meter-cap"><span>out ' + fmtTok(t.output || 0) + '</span><span>' + (tel.turns || 0) + ' turn' + (tel.turns === 1 ? '' : 's') + ' in tail</span></div>';
-    if (WIN) {
+    if (!(ctx > 0)) {
+      parts.push(railSeg('context', '<div class="none">no token usage observed yet</div>'));
+    } else if (WIN) {
       const pct = Math.min(100, Math.round(ctx / WIN * 100));
       const inW = Math.max(0, Math.min(100, (t.input || 0) / WIN * 100));
       const caW = Math.max(0, Math.min(100 - inW, ((t.cacheRead || 0) + (t.cacheCreate || 0)) / WIN * 100));
@@ -1158,29 +1274,42 @@
       if (!x.lifecycleKnown) changed = true;
       x.lifecycleKnown = true;
       if (tel.working !== x.working) { x.working = tel.working; changed = true; }
+    } else if (x.lifecycleKnown) {
+      x.lifecycleKnown = false; x.working = null; changed = true;
     }
     if (lightKnown(tel.needsInput)) {
       const ni = tel.needsInput, nk = tel.needsInputKind || null;
       if (ni !== x.needsInput || nk !== x.needsInputKind) { x.needsInput = ni; x.needsInputKind = nk; changed = true; }
+    } else if (x.needsInput !== null) {
+      x.needsInput = null; x.needsInputKind = null; changed = true;
     }
     if (lightKnown(tel.waitingOnBackground) && tel.waitingOnBackground !== x.waiting) { x.waiting = tel.waitingOnBackground; changed = true; }
+    if (!lightKnown(tel.waitingOnBackground) && x.waiting !== null) { x.waiting = null; changed = true; }
     const unknown = !lightKnown(tel.working) || !lightKnown(tel.needsInput) || !lightKnown(tel.waitingOnBackground);
     if (x.telemetryUnknown !== unknown) { x.telemetryUnknown = unknown; changed = true; }
-    setMeta(x, tel);
+    if (setMeta(x, tel)) changed = true;
     return changed;
   }
-  // Switcher-only metadata: recorded, but deliberately NOT counted as a repaint trigger. The pills
-  // never show it, and an open dialog rebuilt every 2s would fight the keystroke the user is
-  // typing into it — the switcher reads this state fresh each time it opens.
+  // Metadata updates refresh open search results without replacing the search field.
   function setMeta(x, tel) {
+    const before = JSON.stringify([x.stateSince, x.lastActivity, x.contextTokens, x.contextWindow, x.modelShort,
+      x.ask, x.where, x.lastAction, x.task, x.lastActionAt]);
     x.stateSince = typeof tel.stateSince === 'string' ? tel.stateSince : null;
     x.lastActivity = typeof tel.lastActivity === 'string' ? tel.lastActivity : null;
-    x.contextTokens = Number.isFinite(tel.contextTokens) ? tel.contextTokens : null;
+    const ctxTok = Number.isFinite(tel.contextTokens) ? tel.contextTokens : tel.tokens && tel.tokens.context;
+    x.contextTokens = Number.isFinite(ctxTok) && ctxTok > 0 ? ctxTok : null;
     x.contextWindow = Number.isFinite(tel.contextWindow) ? tel.contextWindow : null;
     x.modelShort = typeof tel.modelShort === 'string' && tel.modelShort ? tel.modelShort : null;
+    x.ask = typeof tel.ask === 'string' && tel.ask ? tel.ask : null;
+    x.where = tel.where && typeof tel.where.label === 'string' && typeof tel.where.path === 'string' ? tel.where : null;
+    x.lastAction = typeof tel.lastAction === 'string' && tel.lastAction ? tel.lastAction : null;
+    x.task = tel.task && typeof tel.task.sentence === 'string' && tel.task.sentence ? { sentence: tel.task.sentence, from: tel.task.from === 'goal' ? 'goal' : 'first request' } : null;
+    x.lastActionAt = x.lastAction && typeof (tel.lastActionAt || tel.lastToolAt) === 'string' ? (tel.lastActionAt || tel.lastToolAt) : null;
+    return before !== JSON.stringify([x.stateSince, x.lastActivity, x.contextTokens, x.contextWindow, x.modelShort,
+      x.ask, x.where, x.lastAction, x.task, x.lastActionAt]);
   }
 
-  // SSE lights: tuple → reconcile; {err:true} → keep last state, keep polling this id;
+  // SSE lights: tuple → reconcile; {err:true} → show unknown, keep polling this id;
   // absent → authoritative dark (shell/conflict/killed). Attn is NOT touched by
   // absence — a done-glow the user hasn't acknowledged survives until the tab does.
   function applyLightsMap(map) {
@@ -1188,10 +1317,11 @@
     let changed = false;
     for (const x of S.values()) {
       const tel = map[x.id];
-      if (tel && tel.err) { x.lightsErr = true; continue; }
-      if (tel) { x.lightsErr = false; if (applyLights(x, tel)) changed = true; continue; }
+      if (tel && tel.err) { if (!x.lightsErr) changed = true; x.lightsErr = true; continue; }
+      if (tel) { if (x.lightsErr) changed = true; x.lightsErr = false; if (applyLights(x, tel)) changed = true; continue; }
+      if (x.lightsErr) changed = true;
       x.lightsErr = false;
-      setMeta(x, {});   // authoritatively dark: stale metadata must not outlive the telemetry
+      if (setMeta(x, {})) changed = true;   // stale metadata must not outlive absent telemetry
       if (x.working || x.lifecycleKnown || x.needsInput || x.waiting || x.telemetryUnknown) { x.working = false; x.lifecycleKnown = false; x.needsInput = false; x.needsInputKind = null; x.waiting = false; x.telemetryUnknown = false; changed = true; }
     }
     if (changed && els.view && els.view.classList.contains('active')) paint();
@@ -1207,7 +1337,7 @@
   }
 
   async function pollTelemetry() {
-    if (!els.view.classList.contains('active')) return;          // only while the terminal tab is visible
+    if (document.hidden || !els.view.classList.contains('active')) return;
     if (telInFlight) { telQueued = true; return; }                // one immediate retry after the prior fan-out finishes
     telInFlight = true;
     try {
@@ -1230,14 +1360,15 @@
       let changed = false;
       for (const [x, r] of got) {
         if (!S.has(x.id)) continue;                                        // killed while the fan-out was in flight
-        const tel = r && r.ok && r.telemetry; if (!tel) continue;
+        const tel = r && r.ok && r.telemetry;
+        if (!tel) { if (!sseLightsFresh() && !x.lightsErr) { x.lightsErr = true; changed = true; } continue; }
         // One lights source per mode: while SSE is fresh, a poll response may only
         // reconcile lights for a session still err-flagged when it LANDS (the frame
         // wins if it cleared the flag mid-flight); when stale, this is the fallback
         // and responses reconcile — unless a frame arrived mid-fan-out (re-check).
         const mayLights = sseLightsFresh() ? x.lightsErr : true;
-        if (mayLights) { x.lightsErr = false; if (applyLights(x, tel)) changed = true; }
-        if (x.id === active) { setTok(tel); try { renderRail(tel); } catch (_) {} }
+        if (mayLights) { if (x.lightsErr) changed = true; x.lightsErr = false; if (applyLights(x, tel)) changed = true; }
+        if (x.id === active) { setTok(tel); try { if (r.started === false) tel.notStarted = true; renderRail(tel); } catch (_) {} }
       }
       if (changed) paint();
     } finally {
@@ -1249,11 +1380,13 @@
   async function updateScroll() {
     if (scrollDrag) return;                                   // don't fight an active drag
     const s = active && S.get(active);
-    if (!s || !s.opened || !els.view.classList.contains('active')) return hideScroll();
+    if (!s || !s.opened || document.hidden || !els.view.classList.contains('active') || workspace?.isEditing()) return hideScroll();
     if (scrollInFlight) return;                               // a prior scrollstate poll is still outstanding — don't stack
     scrollInFlight = true;
     try {
-      const r = await api('GET', '/api/term/scrollstate?id=' + enc(active));
+      const id = active;
+      const r = await api('GET', '/api/term/scrollstate?id=' + enc(id));
+      if (active !== id) return;
       if (r.ok) renderScroll(r); else hideScroll();
     } finally { scrollInFlight = false; }
   }
@@ -1347,6 +1480,7 @@
     const ROW = 18;                                   // px of finger travel per history row
     let sy = 0, acc = 0, drag = false, tid = null;
     els.host.addEventListener('touchstart', (e) => {
+      if (e.target.closest('#cd-copypanel')) { tid = null; return; }
       if (e.touches.length !== 1) { tid = null; return; }
       tid = e.touches[0].identifier; sy = e.touches[0].clientY; acc = 0; drag = false;
     }, { passive: true });
@@ -1385,7 +1519,7 @@
       if (el) el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: lastX, clientY: lastY, buttons: 1 }));
     };
     // start only on a real text drag inside the terminal — not on the scrollbar (it owns its own drag)
-    els.host.addEventListener('mousedown', (e) => { if (e.button === 0 && !(e.target.closest && e.target.closest('#cd-scroll'))) { selecting = true; lastX = e.clientX; lastY = e.clientY; } });
+    els.host.addEventListener('mousedown', (e) => { if (e.button === 0 && !(e.target.closest && e.target.closest('#cd-scroll, #cd-copypanel'))) { selecting = true; lastX = e.clientX; lastY = e.clientY; } });
     document.addEventListener('mousemove', (e) => {
       if (!selecting) return;
       lastX = e.clientX; lastY = e.clientY;
@@ -1402,13 +1536,14 @@
   // loss are fail-safe stops. Mouse-only — touch devices have no button 1, so swipe-scroll is untouched.
   function wireMiddleClickAutoscroll() {
     const DEAD = 14, STEP = 8, MAX = 16, TICK = 50;     // px dead zone · px per extra row · rows/tick cap · ms
-    let on = false, anchorY = 0, curY = 0, timer = null, marker = null;
+    let on = false, anchorY = 0, curY = 0, timer = null, marker = null, scrollTarget = null, sessionId = null;
     function getMarker() {
       if (!marker) { marker = elc('div', 'cd-autoscroll-anchor'); for (const g of ['▴', '▾']) { const i = document.createElement('i'); i.textContent = g; marker.appendChild(i); } document.body.appendChild(marker); }
       return marker;
     }
-    function start(x, y) {
+    function start(x, y, target) {
       on = true; anchorY = curY = y;
+      scrollTarget = target; sessionId = active;
       const m = getMarker(); m.style.left = x + 'px'; m.style.top = y + 'px'; m.classList.add('show');
       document.body.classList.add('cd-autoscrolling');
       if (!timer) timer = setInterval(tick, TICK);
@@ -1421,64 +1556,55 @@
       document.body.classList.remove('cd-autoscrolling');
     }
     function tick() {
-      if (!on || !active) return;
+      if (!on) return;
+      if (active !== sessionId || !els.view.classList.contains('active') || (scrollTarget && !scrollTarget.getClientRects().length)) return stop();
       const dy = curY - anchorY;
       if (Math.abs(dy) <= DEAD) return;                 // dead zone around the anchor → hold still
       const rows = Math.min(MAX, 1 + Math.floor((Math.abs(dy) - DEAD) / STEP));
-      pendingWheel += dy < 0 ? rows : -rows;            // pointer above anchor → up/into history (+); below → down (−)
-      scheduleScroll();
+      if (scrollTarget) scrollTarget.scrollTop += (dy < 0 ? -rows : rows) * 12;
+      else if (active) {
+        pendingWheel += dy < 0 ? rows : -rows;
+        scheduleScroll();
+      }
     }
     // Press the middle button to start; release to stop. Capture phase + preventDefault/stopPropagation
     // claims the middle button from the browser's own autoscroll/paste AND xterm underneath.
-    els.host.addEventListener('mousedown', (e) => {
+    els.studio.addEventListener('mousedown', (e) => {
       if (e.button !== 1) return;
+      const panel = e.target.closest('#cd-railbody, #cd-notes, #cd-copyarea');
+      if (!panel && !e.target.closest('#cd-host')) return;
       e.preventDefault(); e.stopPropagation();
-      start(e.clientX, e.clientY);
+      start(e.clientX, e.clientY, panel);
     }, true);
-    els.host.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); }, true);
+    els.studio.addEventListener('auxclick', (e) => { if (e.button === 1 && e.target.closest('#cd-host, #cd-rail')) e.preventDefault(); }, true);
     document.addEventListener('mousemove', (e) => { if (on) curY = e.clientY; });
     addEventListener('mouseup', (e) => { if (on && e.button === 1) stop(); }, true);   // release the button → stop
     addEventListener('blur', stop);                                                    // released off-window → fail safe
-    document.addEventListener('keydown', (e) => { if (on && e.key === 'Escape') stop(); });
+    document.addEventListener('keydown', (e) => { if (on && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); stop(); } }, true);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
   }
 
   // ── Copy-text panel: the full scrollback as plain selectable text. Solves copying output
   // taller than the window — xterm only holds the visible screen, but tmux keeps the history, so
   // we dump it server-side (capture-pane) into a textarea where normal browser selection spans it all.
-  async function openCopyPanel() {
-    if (!active) return;
-    els.copyArea.value = 'Loading scrollback…';
-    els.copyPanel.hidden = false;
-    if (els.copyHint) els.copyHint.textContent = 'drag to select any part — or —';
-    let r; try { r = await api('GET', '/api/term/dump?id=' + enc(active)); } catch (_) { r = null; }
-    if (!els.copyPanel || els.copyPanel.hidden) return;                  // closed while it was loading
-    if (r && r.ok) {
-      els.copyArea.value = r.text ? r.text : '(no output yet)';
-      if (els.copyHint) els.copyHint.textContent = (r.lines || 0) + ' lines — drag to select, or —';
-      try { els.copyArea.focus(); els.copyArea.setSelectionRange(0, 0); els.copyArea.scrollTop = els.copyArea.scrollHeight; } catch (_) {}
-    } else {
-      els.copyArea.value = 'Could not read the terminal: ' + ((r && r.error) || 'request failed');
-    }
-  }
-  function closeCopyPanel() {
-    if (els.copyPanel) els.copyPanel.hidden = true;
-    const s = active && S.get(active); if (s && s.term) { try { s.term.focus(); } catch (_) {} }
-  }
-  async function copyAllText() {
-    const text = els.copyArea.value || '';
-    let ok = false;
-    try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); ok = true; } } catch (_) {}
-    if (!ok) { try { els.copyArea.focus(); els.copyArea.select(); ok = document.execCommand('copy'); els.copyArea.setSelectionRange(0, 0); } catch (_) {} }
-    if (ok && els.copyAll) {
-      els.copyAll.classList.add('done'); els.copyAll.textContent = '✓ Copied';
-      setTimeout(() => { if (els.copyAll) { els.copyAll.classList.remove('done'); els.copyAll.textContent = 'Copy all'; } }, 1400);
-    }
-  }
+  function openCopyPanel() { return workspace.openReader(); }
+  function closeCopyPanel() { workspace.closeReader(); }
+  function copyAllText() { return workspace.copyAll(); }
 
   // ── wiring ─────────────────────────────────────────────────────────────────────────
   function closePop() { els.newPop.classList.remove('open'); }
   // Lane, Tools and switcher wiring — kept together so the whole overflow surface is one block.
   function wireLane() {
+    // Follow the selected tab through renames and changing toolbar widths, until the user
+    // deliberately browses the lane. Selecting a tab opts back into following it.
+    if (els.lane) {
+      els.lane.addEventListener('pointerdown', () => { followActiveTab = false; }, { passive: true });
+      els.lane.addEventListener('wheel', () => { followActiveTab = false; }, { passive: true });
+    }
+    if (window.ResizeObserver && els.sessions && !laneRO) {
+      laneRO = new ResizeObserver(() => { measureLane(); keepActiveTabVisible(); });
+      laneRO.observe(els.sessions);
+    }
     const step = () => Math.max(120, Math.round(els.sessions.clientWidth * 0.8));
     if (els.lanePrev) els.lanePrev.onclick = () => { els.sessions.scrollLeft -= step(); setTimeout(measureLane, 160); };
     if (els.laneNext) els.laneNext.onclick = () => { els.sessions.scrollLeft += step(); setTimeout(measureLane, 160); };
@@ -1541,6 +1667,7 @@
     });
   }
   function wire() {
+    workspace = window.CommandDeckWorkspace.create({ getSession: () => active && S.get(active), api, refit });
     wireLane();
     // Opening the popover focuses the label. Every runtime is selected by radio and launched
     // through the same Start button/Enter path. The latch is set before any I/O.
@@ -1619,15 +1746,20 @@
     // normal input path. pointerdown + preventDefault so xterm's hidden textarea KEEPS focus
     // and the soft keyboard stays open; ⇞/⇟ reuse the same tmux-history plumbing as the wheel.
     if (els.keybar) {
-      const KEYS = { esc: '\x1b', tab: '\t', stab: '\x1b[Z', up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C', cc: '\x03' };
-      els.keybar.querySelectorAll('button').forEach((b) => b.addEventListener('pointerdown', (e) => {
+      const KEYS = { enter: '\r', esc: '\x1b', tab: '\t', stab: '\x1b[Z', up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C', cc: '\x03' };
+      els.keybar.querySelectorAll('button').forEach((b) => {
+        const press = (e) => {
         e.preventDefault();
+        if (workspace.isEditing()) return;
         const s = active && S.get(active); if (!s) return;
         if (b.dataset.act === 'hup') { api('POST', '/api/term/scroll', { id: active, op: 'up', n: 15 }).then(updateScroll); return; }
         if (b.dataset.act === 'hdn') { api('POST', '/api/term/scroll', { id: active, op: (lastPos - 15 <= 0) ? 'bottom' : 'down', n: 15 }).then(updateScroll); return; }
         const k = KEYS[b.dataset.k];
         if (k) sendData(s, k);   // same buffer-aware path as typed keys (the esc button raced the socket too)
-      }));
+        };
+        b.addEventListener('pointerdown', press);
+        b.addEventListener('click', e => { if (e.detail === 0) press(e); });
+      });
     }
     wireImageAttach();   // 📎 button + Ctrl+V paste of screenshots → upload → @-path into Claude
     wireNotes();         // rail Telemetry ⇄ Notes toggle + the autosaving shared scratchpad
@@ -1637,8 +1769,8 @@
     // The ResizeObserver (in boot) is the primary fit driver; these are belt-and-suspenders.
     addEventListener('resize', refit);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(refit);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) requestAnimationFrame(refit); });
-    addEventListener('focus', () => requestAnimationFrame(refit));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) requestAnimationFrame(() => refit(true)); });
+    addEventListener('focus', () => requestAnimationFrame(() => refit(true)));
   }
 
   function injectText(text) {

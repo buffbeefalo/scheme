@@ -4,7 +4,9 @@
 
 The **working computer**, also called the **host**, is where your files and tools live. Run every command in this guide **on that computer**, not on your phone or the separate desktop you will use to view it.
 
-The main steps below are for Ubuntu/Debian Linux, including the Linux path used by DGX Spark. Allow extra time for downloads. You do not need to know Git or install an AI tool to try Scheme.
+The main steps below are for Ubuntu/Debian Linux, including the Linux path used by DGX Spark. The v1.1.0 setup was exercised on an Ubuntu 24.04 ARM64 graphical host with 8 GiB of memory, plus a second Ubuntu desktop connected through SSH. Allow extra time for downloads. You do not need to know Git or install an AI tool to try Scheme.
+
+[Watch the complete setup film](https://buffbeefalo.github.io/scheme/#setup) alongside these steps. It includes chapters, captions, and a readable transcript. [The validation guide](CAPABILITIES.md#validation-for-v110) separates exercised features from unverified account and device setup.
 
 ## 1. Open Terminal and install the basics
 
@@ -51,13 +53,13 @@ Success means the last command prints **v22…**. The installer selects the comp
 
 **On the working computer, in its browser:**
 
-1. Open the [Scheme project page](https://github.com/buffbeefalo/scheme).
-2. Click the green **Code** button, then **Download ZIP**. You can also use the [direct ZIP download](https://github.com/buffbeefalo/scheme/archive/refs/heads/main.zip).
-3. Open the downloaded ZIP and choose **Extract** or **Extract All**. This normally creates a folder named **scheme-main**.
+1. Open the [Scheme v1.1.0 release](https://github.com/buffbeefalo/scheme/releases/tag/v1.1.0).
+2. Choose **Source code (zip)**, or use the [direct v1.1.0 ZIP download](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.0.zip). The project page’s green **Code** button also offers **Download ZIP**, which downloads the latest main branch instead of a pinned release.
+3. Open the downloaded ZIP and choose **Extract** or **Extract All**. The release normally creates **scheme-1.1.0**; the main-branch download creates **scheme-main**.
 4. Move that extracted folder somewhere you will keep it, such as your home folder. Scheme will run from there. Do not try to run it inside the ZIP viewer.
-5. Open the **scheme-main** folder in the file manager. On Ubuntu, right-click empty space in the folder and choose **Open in Terminal**. You should see files including `README.md`, `server.js`, and a `bin` folder.
+5. Open the extracted **scheme-1.1.0** folder in the file manager (or **scheme-main**, if that is what you downloaded). On Ubuntu, right-click empty space in the folder and choose **Open in Terminal**. You should see files including `README.md`, `server.js`, and a `bin` folder.
 
-If **Open in Terminal** is unavailable, open Terminal, type `cd ` with a space after it, drag the extracted folder into the terminal window, and press Enter. This changes the terminal's current folder. Alternatively, if you moved it to your home folder, run `cd ~/scheme-main`.
+If **Open in Terminal** is unavailable, open Terminal, type `cd ` with a space after it, drag the extracted folder into the terminal window, and press Enter. This changes the terminal's current folder. Alternatively, if you moved it to your home folder, run `cd ~/scheme-1.1.0` (or `cd ~/scheme-main` for the main-branch download).
 
 **In that terminal, inside the extracted Scheme folder:**
 
@@ -96,14 +98,14 @@ Keep this terminal window open. You should see **Scheme — starting on http://1
 
 ### Memory on smaller hosts
 
-By default, Scheme refuses a new tab on Linux when less than **8,000 MiB of memory is available**. An 8 GB computer often has less than that available. If your first Shell tab reports **low memory**, stop Scheme with **Ctrl+C** in its original terminal, then start it with a smaller reserve:
+By default, Scheme refuses a new tab on Linux when less than **8,000 MiB of memory is available**. An 8 GiB computer often has less than that available. This default blocked the clean 8 GiB test host as expected. If your first Shell tab reports **low memory**, stop Scheme with **Ctrl+C** in its original terminal, then start it with a smaller reserve:
 
 ```bash
 export SYSMON_MEM_FLOOR_MB=1024
 bin/scheme
 ```
 
-This keeps a 1 GiB reserve for a small Shell/cloud-tool setup. It is not a memory cap or a promise that every workload will fit. Local models need additional memory; choose an appropriate reserve and reduce simultaneous sessions. [Memory settings](CONFIGURATION.md#memory-and-session-limits).
+This was the tested setting for the 8 GiB demonstration host. It keeps a 1 GiB reserve for a small Shell/cloud-tool setup. It is not a memory cap or a promise that every workload will fit. Local models need additional memory; choose an appropriate reserve and reduce simultaneous sessions. [Memory settings](CONFIGURATION.md#memory-and-session-limits).
 
 ## 4. Try a terminal with no AI
 
@@ -124,7 +126,9 @@ You now have a working browser terminal. Leave this tab open for the connection 
 
 ## 5. Connect privately with Tailscale
 
-This is the recommended route for both a phone and another desktop. Tailscale connects your own devices using a private account network. It requires its own account; check its current plans if you need more than personal use.
+Tailscale gives both a phone and another desktop a private HTTPS address. Its account setup was not completed in the clean desktop validation; those tests used [an SSH tunnel](INSTALL-DESKTOP.md#alternative-connection-with-ssh). If you already use SSH, you can follow that route now and return here later.
+
+Tailscale connects your own devices using a private account network. It requires its own account; check its current plans if you need more than personal use.
 
 **Anyone allowed to reach this dashboard can use the working computer as your user account.** Start with your own trusted devices and do not share that access casually. Scheme does not add a second login screen.
 
@@ -145,7 +149,7 @@ This uses [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/s
 
 ## 6. Add an AI tool (optional)
 
-Run these installations and sign-ins **on the working computer**, using your own account and choices. Start each tool once in a normal terminal before opening its Scheme tab. You do not need all of them.
+Run these installations and sign-ins **on the working computer**, using your own account and choices. The release tests do not claim a real cloud account sign-in or billed AI response. Start each tool once in a normal terminal before opening its Scheme tab. You do not need all of them.
 
 ### Claude Code
 
@@ -162,7 +166,7 @@ npm install -g @openai/codex
 codex
 ```
 
-Complete its sign-in using your own supported account or API setup. Access and usage limits belong to that account. Then create a new Scheme session with **Codex**.
+Use a current Codex version with `--no-daemon` support; `codex --version` shows the installed version. CLI installation was checked with 0.159.1, without a cloud sign-in. Complete its sign-in using your own supported account or API setup. Access and usage limits belong to that account. Then create a new Scheme session with **Codex**.
 
 ### Local model with Ollama
 
@@ -179,7 +183,9 @@ This is an optional next step after Shell works. A local model uses your compute
 4. Run `ollama list` and check that the model is present, then run `bin/scheme-doctor` from the Scheme folder.
 5. Create a Scheme session with **Local LLM**. [Configuration](CONFIGURATION.md#local-models) explains choosing another downloaded model.
 
-Scheme's wrapper points Claude Code at Ollama, clears inherited Anthropic API-key settings, and stops if the local endpoint or model is unavailable. It uses a separate `~/.claude-local` settings folder. This follows [Ollama's manual Claude Code integration](https://docs.ollama.com/integrations/claude-code). A local endpoint is not an offline guarantee: tools can access the network, and Ollama also offers cloud-backed models. Choose a downloaded local model if local inference is your intent.
+Scheme's wrapper points Claude Code at Ollama, clears inherited Anthropic API-key settings, and stops if the local endpoint or model is unavailable. It uses a separate `~/.claude-local` settings folder. This follows [Ollama's manual Claude Code integration](https://docs.ollama.com/integrations/claude-code). A local connectivity smoke test succeeded with a smaller Qwen3 model and a 32,768-token context; it does not establish coding quality or validate the default 30B model on an 8 GiB host. Make sure the model’s actual configured context matches the wrapper’s reported context. [Context settings](CONFIGURATION.md#local-models).
+
+A local endpoint is not an offline guarantee: tools can access the network, and Ollama also offers cloud-backed models. Choose a downloaded local model if local inference is your intent.
 
 ## 7. Keep it running at login (optional)
 
@@ -205,13 +211,15 @@ Rerun the installer after moving the Scheme folder, changing a Node version-mana
 bin/install-service.sh --remove
 ```
 
-Removal leaves project files and agent conversations in place. Linux service restarts leave tmux sessions running; close unwanted sessions in Scheme when you want to end them. The working computer must still be powered on and awake.
+Removal leaves project files and agent conversations in place. A real restart of the supplied Linux service preserved the same terminal process and an unfinished Shell job in the desktop test. A real host reboot instead recreated the saved Shell as a new process. Close unwanted sessions in Scheme when you want to end them. The working computer must still be powered on and awake.
 
 ## Updating
 
-**If you downloaded a ZIP:** stop the Scheme server, download and extract a fresh ZIP into a new folder, and start it from that folder. Keep your own projects outside the Scheme download folder. If you use the background service, rerun its installer from the new folder. Keep the old folder until the update works.
+**If you downloaded a ZIP:** stop the Scheme server, download and extract the intended release ZIP into a new folder, and start it from that folder. Keep your own projects outside the Scheme download folder. If you use the background service, rerun its installer from the new folder. Keep the old folder until the update works.
 
-**If you cloned with Git:** run `git pull --ff-only` in your Scheme folder, then restart the foreground server or rerun the background installer. There is no build or `npm install` step for Scheme itself.
+**If you cloned a tagged release, as shown in the readme:** Git keeps that installation on the chosen release rather than a moving branch. Run `git fetch --tags`, then `git switch --detach <release-tag>`, replacing `<release-tag>` with the release you intend to install. Preserve any local changes before switching; do not force the switch. Restart the foreground server or rerun the background installer from that folder.
+
+**If your Git clone follows the main branch:** run `git pull --ff-only` in your Scheme folder, then restart the foreground server or rerun the background installer. There is no build or `npm install` step for Scheme itself.
 
 ## Troubleshooting
 

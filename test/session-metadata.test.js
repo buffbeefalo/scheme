@@ -176,6 +176,7 @@ test('summarize carries the compact metadata with explicit nulls for the unknown
     waitingOnBackground: null, lastTurnId: null,
     stateSince: null, lastActivity: null,
     contextTokens: null, contextWindow: null, modelShort: null,
+    ask: null, where: null, lastAction: null, lastActionAt: null,
   });
 });
 

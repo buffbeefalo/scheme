@@ -8,6 +8,7 @@
 <meta name="theme-color" content="#eee3cd" />
 <link rel="manifest" href="/manifest.json" />
 <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+<script src="/vendor/terminal-theme.js"></script>
 <title>Scheme</title>
 <!-- Fonts are optional: every family below has a system fallback, so the page renders offline. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,8 +16,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/vendor/xterm.css">
 <style>
-  /* Theme, header, tabs and the terminal cockpit are lifted verbatim from the fleet dashboard this
-     page was carved from (see PUBLISHING.md). Unused selectors from that page are harmless. */
+  /* Scheme keeps the public Terminal and Connect views. Theme roles live in terminal-theme.css. */
   /* ════════ CAUSEHOUSE LIGHT (2026-07-01) ════════
      Warm-cream editorial reskin (reference: causehouse.co): Fraunces + Inter,
      forest-green ink, sage/lime accents, thin-outline cards, zero glow. Every
@@ -24,7 +24,7 @@
      The terminal keeps a deliberate DARK well (ANSI colors need it). */
   :root{
     --ink:#1d2b1f; --bg:#eee3cd; --s1:#f3ead7; --s2:#f7f0e0; --s3:#e5d8bf;
-    --line:rgba(29,43,31,.14); --line2:rgba(29,43,31,.26); --line3:rgba(29,43,31,.42);
+    --line:rgba(var(--ink-rgb),.14); --line2:rgba(var(--ink-rgb),.26); --line3:rgba(var(--ink-rgb),.42);
     /* --dim and --faint are darkened from #6b7767 / #9aa392. Both carry 10-11px text on cream,
        where the old values measured 3.34-4.15:1 and 1.86-2.30:1 — the faint tier was under half
        the 4.5:1 minimum. Now 4.44-5.51:1 and 3.94-4.89:1. The four-step ladder still descends
@@ -49,7 +49,7 @@
   ::-webkit-scrollbar{width:11px;height:11px}
   ::-webkit-scrollbar-thumb{background:var(--line2);border-radius:7px;border:3px solid var(--bg)}
   ::-webkit-scrollbar-thumb:hover{background:var(--line3)}
-  ::selection{background:rgba(191,234,75,.55)}
+  ::selection{background:rgba(var(--lime-rgb),.55)}
   body{margin:0;min-height:100vh;color:var(--txt);font-family:var(--ui);font-size:13.5px;line-height:1.5;
     background:var(--bg);overflow-x:hidden}
   header,nav.tabs,main,footer,.critbar{position:relative;z-index:1}
@@ -62,7 +62,7 @@
 
   /* ---------- header ---------- */
   header{display:flex;align-items:center;gap:16px;padding:14px 24px;flex-wrap:wrap;
-    border-bottom:1px solid var(--line);background:rgba(238,227,205,.92);backdrop-filter:blur(8px)}
+    border-bottom:1px solid var(--line);background:rgba(var(--bg-rgb),.92);backdrop-filter:blur(8px)}
   .brand{display:flex;align-items:center;gap:11px}
   .crest{position:relative;width:34px;height:34px;flex:none;display:grid;place-items:center;
     background:var(--sage);border:1px solid var(--line2);border-radius:10px;color:var(--ink)}
@@ -95,7 +95,7 @@
 
   /* ---------- critical-now strip ---------- */
   .critbar{display:flex;align-items:center;gap:14px;padding:9px 24px;flex-wrap:wrap;overflow:hidden;
-    border-bottom:1px solid var(--line);background:rgba(185,217,196,.28);transition:background .4s,border-color .4s}
+    border-bottom:1px solid var(--line);background:rgba(var(--sage-rgb),.28);transition:background .4s,border-color .4s}
   .critbar.alert{background:rgba(197,58,32,.09);border-bottom-color:rgba(197,58,32,.3)}
   .critbar .cb-led{width:9px;height:9px;border-radius:50%;background:var(--green);flex:none}
   .critbar.alert .cb-led{background:var(--red)}
@@ -110,7 +110,7 @@
   .needbar[hidden]{display:none}
   .need-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .need-msg{font-family:var(--ui);letter-spacing:.2px;font-weight:600;font-size:12.5px;color:var(--cyan2)}
-  .need-input{flex:1;min-width:200px;background:#f8f0dd;border:1px solid rgba(30,91,255,.3);border-radius:999px;color:var(--txt);padding:7px 14px;font-size:13px;font-family:var(--ui)}
+  .need-input{flex:1;min-width:200px;background:var(--field);border:1px solid rgba(30,91,255,.3);border-radius:999px;color:var(--txt);padding:7px 14px;font-size:13px;font-family:var(--ui)}
   .need-send{background:var(--cyan);color:#fff;border:0;border-radius:999px;padding:7px 16px;font-weight:600;cursor:pointer;font-family:var(--ui);font-size:11px;letter-spacing:.5px;text-transform:uppercase}
   .critbar .cb-title{font-family:var(--disp);font-weight:600;letter-spacing:.2px;font-size:13.5px;color:var(--green2);flex:none}
   .critbar.alert .cb-title{color:var(--red2)}
@@ -127,7 +127,7 @@
      Same idiom as .q-err: a real left rule you can spot while scrolling. */
   #bots tr.warn-row{background:rgba(169,106,28,.07);box-shadow:inset 3px 0 0 var(--amber)}
   #bots tr.flash{animation:rowflash 1.6s var(--ease) both}
-  @keyframes rowflash{0%,60%{background:rgba(191,234,75,.5)}100%{background:transparent}}
+  @keyframes rowflash{0%,60%{background:rgba(var(--lime-rgb),.5)}100%{background:transparent}}
 
   /* ---------- tabs ---------- */
   /* The strip must SCROLL, not spill. Between 701px (where the mobile dock stops) and ~1105px
@@ -138,13 +138,13 @@
      the tab strip parks directly underneath it instead of sliding behind it. */
   nav.tabs{position:sticky;top:var(--cb-h,0px);z-index:9;display:flex;gap:5px;padding:9px 24px;
     overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;
-    background:rgba(238,227,205,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+    background:rgba(var(--bg-rgb),.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
   nav.tabs::-webkit-scrollbar{display:none}
   nav.tabs button{flex:none;position:relative;display:inline-flex;align-items:center;gap:7px;background:none;border:1px solid transparent;color:var(--mut);cursor:pointer;
     font-family:var(--ui);font-size:12.5px;font-weight:600;letter-spacing:.2px;
     padding:8px 15px;border-radius:999px;transition:color .2s,background .2s,border-color .2s}
   nav.tabs button svg{width:15px;height:15px;flex:none}
-  nav.tabs button:hover{color:var(--txt);background:rgba(29,43,31,.05)}
+  nav.tabs button:hover{color:var(--txt);background:rgba(var(--ink-rgb),.05)}
   nav.tabs button.active{color:var(--bg);background:var(--ink)}
   /* Overflow affordance: the strip scrolls with its scrollbar hidden, so at mid-band widths
      (unfolded Z Fold 904px) Architecture+About sit invisibly off-screen. When tabs are clipped
@@ -152,7 +152,7 @@
   nav.tabs .tabs-more{position:sticky;right:0;display:none;flex:none;align-items:center;
     padding:6px 10px;border:1px solid var(--line2);border-radius:8px;background:var(--sage);
     color:var(--ink);font-size:14px;line-height:1;cursor:pointer;
-    box-shadow:-12px 0 12px -6px rgba(238,227,205,.9)}
+    box-shadow:-12px 0 12px -6px rgba(var(--bg-rgb),.9)}
   nav.tabs.tabs-clipped .tabs-more{display:inline-flex}
   /* solid, not 38% alpha: composited over cream the translucent ring measured 1.70:1, under the
      3:1 that a focus indicator needs. Solid --cyan on --bg is 4.13:1 and looks the same shape. */
@@ -176,7 +176,7 @@
   #view-monitor.active,#view-quality.active{align-items:start}
   .panel{position:relative;background:var(--s2);
     border:1px solid var(--line);border-radius:var(--r);padding:18px 18px 17px;
-    box-shadow:0 1px 2px rgba(29,43,31,.04);
+    box-shadow:0 1px 2px rgba(var(--ink-rgb),.04);
     transition:border-color .25s var(--ease),transform .25s var(--ease)}
   .panel:hover{border-color:var(--line2);transform:translateY(-2px)}
   /* The staggered entrance is a first-paint flourish, not a tab-switch transition. showTab()
@@ -217,7 +217,7 @@
   .bb-rep{font-size:11px}
   /* open-URL toast: a link Claude tried to open lands here so it opens on YOUR device, not the box */
   .toast-wrap{position:fixed;right:18px;bottom:18px;z-index:99999;display:flex;flex-direction:column;gap:10px;max-width:390px}
-  .toast{background:var(--s2);border:1px solid var(--line2);border-left:3px solid var(--cyan);border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(29,43,31,.16);animation:rise .3s var(--ease) both}
+  .toast{background:var(--s2);border:1px solid var(--line2);border-left:3px solid var(--cyan);border-radius:12px;padding:12px 14px;box-shadow:0 10px 30px rgba(var(--ink-rgb),.16);animation:rise .3s var(--ease) both}
   .toast .tt{font-family:var(--ui);font-weight:600;font-size:11px;letter-spacing:.3px;color:var(--mut);margin-bottom:5px}
   .toast .tu{font-family:var(--mono);font-size:12px;color:var(--cyan2);word-break:break-all;margin-bottom:9px;max-height:48px;overflow:hidden}
   .toast .tb{display:flex;gap:8px;justify-content:flex-end}
@@ -354,7 +354,7 @@
      which would leave the dialog permanently on screen. */
   .cd-switcher[hidden]{display:none}
   .cd-switcher{position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:60;max-height:min(60vh,420px);display:flex;flex-direction:column;
-    border:1px solid var(--line2);border-radius:12px;background:var(--s1);box-shadow:0 12px 34px rgba(29,43,31,.18);overflow:hidden}
+    border:1px solid var(--line2);border-radius:12px;background:var(--s1);box-shadow:0 12px 34px rgba(var(--ink-rgb),.18);overflow:hidden}
   .cd-sw-head{display:flex;align-items:center;gap:8px;padding:9px 10px;border-bottom:1px solid var(--line);flex:none}
   .cd-sw-head input{flex:1;min-width:0;font-family:var(--ui);font-size:12.5px;color:var(--txt);background:var(--s2);
     border:1px solid var(--line);border-radius:8px;padding:7px 10px}
@@ -387,7 +387,7 @@
   .cd-bar .cd-sess.dragging{opacity:.35;cursor:grabbing;border-style:dashed;border-color:var(--line2)}
   /* drag-to-reorder: a green insertion bar marks EXACTLY where the tab will land
      (left/right edge by pointer half); the hovered tab tints so the target is unmissable */
-  .cd-bar .cd-sess.drop-before,.cd-bar .cd-sess.drop-after{background:rgba(185,217,196,.4);border-color:rgba(47,107,70,.35)}
+  .cd-bar .cd-sess.drop-before,.cd-bar .cd-sess.drop-after{background:rgba(var(--sage-rgb),.4);border-color:rgba(47,107,70,.35)}
   .cd-bar .cd-sess.drop-before::before,.cd-bar .cd-sess.drop-after::after{content:"";position:absolute;top:-4px;bottom:-4px;width:3px;
     border-radius:2px;background:var(--green);z-index:5;pointer-events:none}
   .cd-bar .cd-sess.drop-before::before{left:-5px}
@@ -409,7 +409,7 @@
   .cd-bar .cd-pop{top:46px;left:9px;right:auto}
   #view-terminal #cd-host{border:1px solid var(--line2);border-radius:12px}
   .cd-panel{border:1px solid var(--line);border-radius:var(--r);background:var(--s2);
-    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 1px 2px rgba(29,43,31,.04)}
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 1px 2px rgba(var(--ink-rgb),.04)}
   .cd-phead{display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line);flex:none}
   .cd-phead h3{font-family:var(--ui);font-size:9.5px;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--mut);margin:0}
   .cd-phead .sp{margin-left:auto}
@@ -483,13 +483,13 @@
   .cd-modepill:hover{background:var(--s3)}
   .cd-modepill.auto{color:var(--amber2);border-color:rgba(169,106,28,.4);background:rgba(169,106,28,.08)}
   .cd-modepill.plan{color:var(--cyan2);border-color:rgba(30,91,255,.35);background:rgba(30,91,255,.07)}
-  .cd-modepill.acceptEdits{color:var(--green2);border-color:rgba(47,107,70,.4);background:rgba(185,217,196,.35)}
+  .cd-modepill.acceptEdits{color:var(--green2);border-color:rgba(47,107,70,.4);background:rgba(var(--sage-rgb),.35)}
   .cd-modepill.bypassPermissions{color:var(--red2);border-color:rgba(197,58,32,.35);background:rgba(197,58,32,.08)}
   .cd-ctx{font-family:var(--mono);font-size:10px;color:var(--dim);font-variant-numeric:tabular-nums;white-space:nowrap}
   .cd-ctx b{color:var(--amber2)}
   .cd-iconbtn{font-family:var(--mono);font-size:12px;border:1px solid var(--line2);background:var(--s2);color:var(--mut);border-radius:8px;padding:4px 8px;cursor:pointer;transition:.15s;line-height:1}
   .cd-iconbtn:hover{border-color:var(--green);color:var(--green2)}
-  .cd-iconbtn.on{color:var(--green2);border-color:rgba(47,107,70,.45);background:rgba(185,217,196,.35)}
+  .cd-iconbtn.on{color:var(--green2);border-color:rgba(47,107,70,.45);background:rgba(var(--sage-rgb),.35)}
   .cd-btn{font-family:var(--ui);font-size:10px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;border:1px solid var(--line3);
     background:var(--s2);color:var(--txt);border-radius:999px;padding:6px 13px;cursor:pointer;transition:.15s;white-space:nowrap}
   .cd-btn:hover{border-color:var(--green);color:var(--green2)}
@@ -498,7 +498,7 @@
   #cd-host::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--rt,transparent);z-index:5;pointer-events:none}
   /* image drag-and-drop */
   .cd-drop-overlay{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
-    background:rgba(23,33,26,.9);border:2px dashed rgba(191,234,75,.7);border-radius:12px;pointer-events:none;opacity:0;transition:opacity .15s var(--ease)}
+    background:rgba(23,33,26,.9);border:2px dashed rgba(var(--lime-rgb),.7);border-radius:12px;pointer-events:none;opacity:0;transition:opacity .15s var(--ease)}
   .cd-drop-overlay.active{opacity:1;pointer-events:none}
   .cd-drop-ico{color:var(--lime)}
   .cd-drop-lbl{font-family:var(--ui);font-size:12px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--lime)}
@@ -520,7 +520,7 @@
   .cd-attach-x:hover{color:var(--well-txt)}
   /* "Copy text" panel — overlays the terminal with the full scrollback as selectable text. */
   .cd-copypanel{position:absolute;inset:8px;z-index:25;display:flex;flex-direction:column;background:var(--s2);
-    border:1px solid var(--line2);border-radius:12px;box-shadow:0 18px 50px -10px rgba(29,43,31,.35);animation:rise .16s var(--ease) both}
+    border:1px solid var(--line2);border-radius:12px;box-shadow:0 18px 50px -10px rgba(var(--ink-rgb),.35);animation:rise .16s var(--ease) both}
   .cd-copypanel[hidden]{display:none}
   .cd-copyhead{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);flex:none}
   .cd-copytitle{font-family:var(--ui);font-size:10.5px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--green2)}
@@ -560,7 +560,7 @@
   .cd-jump.show{display:inline-flex;animation:rise .2s var(--ease) both}
   .cd-jump:hover{transform:translateY(-1px)}
   /* clean right-click menu (replaces the browser's native menu inside the terminal) */
-  .cd-ctx{position:fixed;z-index:100;min-width:152px;background:var(--s2);border:1px solid var(--line2);border-radius:10px;padding:5px;box-shadow:0 14px 40px rgba(29,43,31,.25);font-family:var(--ui);font-size:12.5px}
+  .cd-ctx{position:fixed;z-index:100;min-width:152px;background:var(--s2);border:1px solid var(--line2);border-radius:10px;padding:5px;box-shadow:0 14px 40px rgba(var(--ink-rgb),.25);font-family:var(--ui);font-size:12.5px}
   .cd-ctx[hidden]{display:none}
   .cd-ctx-item{padding:7px 12px;border-radius:7px;color:var(--txt);cursor:pointer;white-space:nowrap}
   .cd-ctx-item:hover{background:var(--sage);color:var(--green2)}
@@ -569,7 +569,7 @@
   .cd-empty{display:flex;align-items:center;justify-content:center;height:100%;color:rgba(242,234,217,.55);font-family:var(--ui);letter-spacing:0;font-size:12px;
     flex-direction:column;gap:11px}
   .ce-mark{width:64px;height:64px;display:grid;place-items:center;color:var(--lime);
-    border:1px solid rgba(191,234,75,.4);border-radius:18px;background:rgba(191,234,75,.08)}
+    border:1px solid rgba(var(--lime-rgb),.4);border-radius:18px;background:rgba(var(--lime-rgb),.08)}
   .ce-mark svg{width:30px;height:30px}
   .ce-title{font-family:var(--disp);font-size:17px;font-weight:600;letter-spacing:.2px;color:var(--well-txt)}
   .ce-sub{font-size:12px;color:rgba(242,234,217,.6);max-width:420px;text-align:center;line-height:1.7}
@@ -578,19 +578,19 @@
     background:rgba(242,234,217,.08);border:1px solid rgba(242,234,217,.2);border-bottom-width:2px;border-radius:5px;padding:2px 8px}
   /* new-session popover */
   .cd-pop{display:none;position:absolute;z-index:30;top:46px;right:10px;background:var(--s2);border:1px solid var(--line2);
-    border-radius:14px;padding:13px;box-shadow:0 18px 46px rgba(29,43,31,.22);min-width:300px}
+    border-radius:14px;padding:13px;box-shadow:0 18px 46px rgba(var(--ink-rgb),.22);min-width:300px}
   .cd-pop.open{display:block;animation:rise .2s var(--ease) both}
   .cd-pop label{display:block;font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);margin:8px 0 4px}
   .cd-pop label:first-child{margin-top:0}
-  .cd-pop select,.cd-pop input{width:100%;background:#f8f0dd;border:1px solid var(--line2);border-radius:8px;color:var(--txt);font-family:var(--ui);font-size:12.5px;padding:8px}
+  .cd-pop select,.cd-pop input{width:100%;background:var(--field);border:1px solid var(--line2);border-radius:8px;color:var(--txt);font-family:var(--ui);font-size:12.5px;padding:8px}
   .cd-pop select:focus,.cd-pop input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(47,107,70,.12)}
   #cd-create{background:var(--ink);border-color:var(--ink);color:var(--bg);display:flex;align-items:center;justify-content:center;gap:9px}
   #cd-create:hover{background:var(--green2);color:var(--bg)}
   #cd-create kbd{font-family:var(--mono);font-size:10px;color:var(--lime);background:rgba(0,0,0,.25);
-    border:1px solid rgba(191,234,75,.4);border-radius:4px;padding:1px 6px;text-transform:none;letter-spacing:0}
+    border:1px solid rgba(var(--lime-rgb),.4);border-radius:4px;padding:1px 6px;text-transform:none;letter-spacing:0}
   .cd-search{display:none;align-items:center;gap:10px;padding:8px 11px;border-top:1px solid var(--line);background:var(--s1);flex:none}
   .cd-search.open{display:flex}
-  .cd-search input{flex:1;background:#f8f0dd;border:1px solid var(--line2);border-radius:8px;color:var(--txt);font-family:var(--mono);font-size:12px;padding:7px 9px}
+  .cd-search input{flex:1;background:var(--field);border:1px solid var(--line2);border-radius:8px;color:var(--txt);font-family:var(--mono);font-size:12px;padding:7px 9px}
   .cd-search .hint{color:var(--dim);font-size:10.5px;font-family:var(--ui);letter-spacing:.3px}
   /* quick-action bar */
   .cd-quick{display:flex;flex-wrap:nowrap;gap:6px;padding:8px 11px;border-top:1px solid var(--line);flex:none;background:var(--s1);overflow-x:auto;scrollbar-width:thin}
@@ -605,7 +605,7 @@
   .cd-ctool:hover{border-color:var(--green);color:var(--green2)}
   .cd-compose-tools .cd-hint{margin-left:auto;color:var(--dim);font-size:10px;font-family:var(--ui);letter-spacing:.3px}
   .cd-inwrap{display:flex;align-items:flex-end;gap:9px}
-  .cd-input{flex:1;resize:none;max-height:184px;min-height:42px;background:#f8f0dd;border:1px solid var(--line2);border-radius:12px;color:var(--txt);font-family:var(--mono);font-size:13px;line-height:1.5;padding:11px 13px;transition:border-color .15s,box-shadow .15s}
+  .cd-input{flex:1;resize:none;max-height:184px;min-height:42px;background:var(--field);border:1px solid var(--line2);border-radius:12px;color:var(--txt);font-family:var(--mono);font-size:13px;line-height:1.5;padding:11px 13px;transition:border-color .15s,box-shadow .15s}
   .cd-input:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(47,107,70,.1)}
   .cd-input::placeholder{color:var(--dim)}
   .cd-send{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--ink);background:var(--ink);color:var(--bg);font-size:17px;cursor:pointer;transition:.15s;display:grid;place-items:center}
@@ -614,7 +614,7 @@
   .cd-imgchip{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10.5px;color:var(--cyan2);background:rgba(30,91,255,.07);border:1px solid rgba(30,91,255,.3);border-radius:999px;padding:3px 10px;margin-bottom:6px}
   .cd-imgchip .x{cursor:pointer;color:var(--dim)}.cd-imgchip .x:hover{color:var(--red2)}
   /* autocomplete dropdown (slash + @file) — floats above the composer */
-  .cd-ac{display:none;position:absolute;left:11px;right:66px;bottom:calc(100% - 2px);z-index:40;background:var(--s2);border:1px solid var(--line2);border-radius:12px;box-shadow:0 -12px 40px rgba(29,43,31,.22);max-height:284px;overflow:auto;padding:6px;margin-bottom:6px}
+  .cd-ac{display:none;position:absolute;left:11px;right:66px;bottom:calc(100% - 2px);z-index:40;background:var(--s2);border:1px solid var(--line2);border-radius:12px;box-shadow:0 -12px 40px rgba(var(--ink-rgb),.22);max-height:284px;overflow:auto;padding:6px;margin-bottom:6px}
   .cd-ac.open{display:block;animation:rise .14s var(--ease) both}
   .cd-aci{display:flex;align-items:center;gap:10px;padding:7px 9px;border-radius:8px;cursor:pointer}
   .cd-aci.sel,.cd-aci:hover{background:var(--sage)}
@@ -633,9 +633,9 @@
   .cd-todo.completed{color:var(--dim)}.cd-todo.completed .bx{color:var(--green2)}
   .cd-todo.in_progress{color:var(--amber2)}.cd-todo.in_progress .bx{color:var(--amber2)}
   /* modal: diff viewer + shortcuts cheatsheet */
-  .cd-modal{display:none;position:fixed;inset:0;z-index:60;background:rgba(29,43,31,.38);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:34px}
+  .cd-modal{display:none;position:fixed;inset:0;z-index:60;background:rgba(var(--ink-rgb),.38);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:34px}
   .cd-modal.open{display:flex;animation:rise .2s var(--ease) both}
-  .cd-modal-card{background:var(--s2);border:1px solid var(--line2);border-radius:16px;box-shadow:0 34px 90px rgba(29,43,31,.35);max-width:1000px;width:100%;max-height:84vh;display:flex;flex-direction:column;overflow:hidden}
+  .cd-modal-card{background:var(--s2);border:1px solid var(--line2);border-radius:16px;box-shadow:0 34px 90px rgba(var(--ink-rgb),.35);max-width:1000px;width:100%;max-height:84vh;display:flex;flex-direction:column;overflow:hidden}
   .cd-modal-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line)}
   .cd-modal-head h3{font-family:var(--disp);font-size:15px;letter-spacing:.2px;color:var(--txt);margin:0;font-weight:600}
   .cd-modal-head .fp{font-family:var(--mono);font-size:12px;color:var(--green2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -663,7 +663,7 @@
   .cd-notes{flex:1;min-height:0;width:100%;resize:none;background:transparent;border:none;outline:none;
     color:var(--txt);font-family:var(--mono);font-size:12px;line-height:1.65;padding:11px 13px;scrollbar-width:thin;caret-color:var(--green)}
   .cd-notes::placeholder{color:var(--dim);font-style:italic}
-  .cd-notes::selection{background:rgba(191,234,75,.5)}
+  .cd-notes::selection{background:rgba(var(--lime-rgb),.5)}
   .cd-railbody .seg{margin-bottom:16px}
   .cd-railbody .seg:last-child{margin-bottom:0}
   .cd-railbody .seglbl{font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:1.3px;text-transform:uppercase;color:var(--dim);margin-bottom:8px;display:flex;align-items:center;gap:6px}
@@ -737,7 +737,7 @@
      re-anchor them to the window instead of the viewport. */
   @media(min-width:701px){
     .cd-studio{position:relative;border-radius:16px;background:var(--s2);
-      border:1px solid var(--line2);box-shadow:0 24px 60px -40px rgba(29,43,31,.4)}
+      border:1px solid var(--line2);box-shadow:0 24px 60px -40px rgba(var(--ink-rgb),.4)}
     /* bar = titlebar: flush, hairline below, radius only on top */
     .cd-bar{margin-bottom:0;border:none;border-bottom:1px solid var(--line);border-radius:16px 16px 0 0}
     /* content row: terminal and rail share the frame, split by a hairline */
@@ -789,9 +789,9 @@
     animation:none!important;transition:none!important;
     backdrop-filter:none!important;box-shadow:none!important;filter:none!important}
   /* opaque stand-ins where blur used to keep sticky bars readable */
-  body.calm header{background:rgba(238,227,205,.98)!important}
-  body.calm nav.tabs{background:rgba(238,227,205,.98)!important}
-  body.calm .dock{background:rgba(238,227,205,.98)!important}
+  body.calm header{background:rgba(var(--bg-rgb),.98)!important}
+  body.calm nav.tabs{background:rgba(var(--bg-rgb),.98)!important}
+  body.calm .dock{background:rgba(var(--bg-rgb),.98)!important}
   body.calm{background:var(--bg)!important}
 
   /* one-time boot splash: a quiet cream card-flash, gone in ~1.6s.
@@ -824,10 +824,10 @@
      dock in the thumb zone, cards tighten, and the two headline gauges share the
      first screenful. The unfolded inner screen (>700px) keeps the desktop layout. */
   .dock{display:none;position:fixed;left:0;right:0;bottom:0;z-index:40;
-    background:rgba(238,227,205,.96);
+    background:rgba(var(--bg-rgb),.96);
     border-top:1px solid var(--line2);
     padding:7px max(10px,env(safe-area-inset-left)) calc(7px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-right));
-    box-shadow:0 -8px 24px -14px rgba(29,43,31,.25)}
+    box-shadow:0 -8px 24px -14px rgba(var(--ink-rgb),.25)}
   .dock button{position:relative;flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
     background:none;border:none;border-radius:12px;padding:5px 0 4px;cursor:pointer;
     font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:0;
@@ -904,7 +904,7 @@
     body{background:var(--bg);overscroll-behavior-y:contain;-webkit-tap-highlight-color:transparent}
     .view.active .panel,.view.active .ctl-card{animation:none}
     header,nav.tabs{backdrop-filter:none}
-    .dock{backdrop-filter:none;background:rgba(238,227,205,.98)}
+    .dock{backdrop-filter:none;background:rgba(var(--bg-rgb),.98)}
     .dock button:active .dk-ic{transform:scale(.86)}
     header,.critbar,.dock,.cd-bar,.cd-keybar{-webkit-user-select:none;user-select:none}
     /* session bar: one row, finger-sized — brand label / rail toggle / dims are
@@ -1028,6 +1028,8 @@
   .cx-state{font-family:var(--mono);font-size:11px;color:var(--green2)}
   .cx-state.off{color:var(--dim)}
 </style>
+<link rel="stylesheet" href="/vendor/terminal-workspace.css">
+<link rel="stylesheet" href="/vendor/terminal-theme.css">
 </head>
 <body class="booting">
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
@@ -1064,6 +1066,7 @@
   </div>
   <span class="host" id="host">—</span>
   <span class="hspace"></span>
+  <label class="theme-picker"><span>Theme</span><select data-theme-select aria-label="Color theme"><option value="auto">Auto</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
   <div class="hstats">
   <span class="hstat">Clock<b id="clock">—</b></span>
   <span class="hstat">Load<b id="load">—</b></span>
@@ -1105,6 +1108,8 @@
     <div class="cd-bar">
       <button class="cd-newbtn" id="cd-new" title="New session — Claude Code, Codex, a local LLM, or a plain terminal">＋ New</button>
       <button class="cd-newbtn" id="cd-img" title="Attach image(s) — pick files, or paste (Ctrl+V) / drag a screenshot onto the terminal. Drops an @-path into Claude."><svg width="12" height="12" style="vertical-align:-1px" aria-hidden="true"><use href="#i-clip"/></svg> Image</button>
+      <button class="cd-work-action" id="cd-read" type="button" aria-controls="cd-copypanel" aria-expanded="false">Read</button>
+      <button class="cd-work-action" id="cd-write" type="button" aria-controls="cd-draft-panel" aria-expanded="false">Write</button>
       <input type="file" id="cd-file" accept="image/*" multiple hidden>
       <!-- Session lane (council a6363f19). #cd-sessions stays the ONE canonical tablist; the lane
            only adds the overflow affordances it never had. Measured before this: the well held a
@@ -1126,13 +1131,16 @@
       <button class="cd-toolsbtn" id="cd-tools" type="button" aria-expanded="false" aria-controls="cd-well"
               title="Session tools — model, context, size, zoom, telemetry rail">⋯ Tools</button>
       <div class="cd-well" id="cd-well">
+        <label class="theme-picker theme-tools"><span>Theme</span><select data-theme-select aria-label="Color theme"><option value="auto">Auto</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
+        <button class="cd-work-action" id="cd-focus" type="button" aria-pressed="false">Focus</button>
+        <button class="cd-work-action" id="cd-usage-toggle" type="button" aria-expanded="false" aria-controls="cd-usagebar">Usage</button>
         <span class="cd-rt-chip" id="cd-rt" style="display:none"><i class="g"></i><i class="lbl"></i></span>
         <span class="cd-model-chip" id="cd-model" title="model running in this session"></span>
         <span class="cd-tok" id="cd-tok" title="context tokens this session is using"></span>
         <span class="cd-dims" id="cd-dims" title="terminal size · columns × rows"></span>
         <span class="cd-wsep"></span>
         <button class="cd-zoom" id="cd-previnput" title="Jump to your previous input (❯) — click again to step further back; ‘Latest’ returns to live">⌃❯</button>
-        <button class="cd-zoom" id="cd-copytext" title="Copy text — open the full scrollback to select &amp; copy any output (even taller than the window)">⧉</button>
+        <button class="cd-zoom" id="cd-copytext" aria-expanded="false" aria-controls="cd-copypanel" title="Copy text — open the full scrollback to select &amp; copy any output (even taller than the window)">⧉</button>
         <button class="cd-zoom" id="cd-zoomout" title="Smaller text">A−</button>
         <button class="cd-zoom" id="cd-zoomin" title="Bigger text">A+</button>
         <button class="cd-zoom" id="cd-rail-toggle" aria-label="Toggle telemetry" aria-controls="cd-rail" title="Toggle the session telemetry panel">◧</button>
@@ -1141,7 +1149,7 @@
            so the 2s telemetry repaint (which rebuilds that list wholesale) cannot destroy it. -->
       <div class="cd-switcher" id="cd-switcher" role="dialog" aria-modal="true" aria-label="Switch session" hidden>
         <div class="cd-sw-head">
-          <input id="cd-sw-q" type="search" placeholder="Search sessions…" aria-label="Search sessions" autocomplete="off">
+          <input id="cd-sw-q" type="search" placeholder="Search names, projects, requests…" aria-label="Search sessions" autocomplete="off">
           <span class="cd-sw-n" id="cd-sw-n" role="status" aria-live="polite"></span>
           <button class="cd-sw-x" id="cd-sw-close" type="button" aria-label="Close">✕</button>
         </div>
@@ -1187,14 +1195,24 @@
         <button class="cd-attach-ins" id="cd-attach-ins">↵ Insert</button>
         <button class="cd-attach-x" id="cd-attach-x" title="Dismiss all">✕</button>
       </div>
-      <div class="cd-copypanel" id="cd-copypanel" hidden>
+      <div class="cd-copypanel" id="cd-copypanel" role="region" aria-label="Terminal output reader" hidden>
         <div class="cd-copyhead">
-          <span class="cd-copytitle">⧉ Copy text</span>
+          <span class="cd-copytitle">Copy text</span>
+          <span class="cd-reader-session" id="cd-reader-session"></span>
           <span class="cd-copyhint" id="cd-copyhint">drag to select any part — or —</span>
           <button class="cd-copyall" id="cd-copyall">Copy all</button>
           <button class="cd-copyclose" id="cd-copyclose" title="Close (Esc)">✕ Close</button>
         </div>
-        <textarea class="cd-copyarea" id="cd-copyarea" readonly spellcheck="false"></textarea>
+        <div class="cd-reader-tools" aria-label="Reading controls">
+          <button type="button" id="cd-reader-minus" aria-label="Smaller reading text">A−</button>
+          <button type="button" id="cd-reader-plus" aria-label="Larger reading text">A+</button>
+          <button type="button" id="cd-reader-wrap" aria-pressed="true">Wrap</button>
+          <button type="button" id="cd-reader-start">Start</button>
+          <button type="button" id="cd-reader-end">End</button>
+          <button type="button" id="cd-reader-refresh">Refresh</button>
+        </div>
+        <textarea class="cd-copyarea" id="cd-copyarea" aria-label="Terminal output" readonly spellcheck="false"></textarea>
+        <button class="cd-work-action" type="button" id="cd-reader-earlier">More history</button>
       </div>
     </div>
     <aside class="cd-rail cd-panel" id="cd-rail">
@@ -1217,10 +1235,26 @@
       <div class="cd-vitals" id="cd-vitals" title="Box vitals — live from the 2s feed"><span class="none">no feed yet</span></div>
     </aside>
     </div>
+    <form class="cd-draft-panel" id="cd-draft-panel" hidden>
+      <div class="cd-draft-head">
+        <label for="cd-draft">Write</label>
+        <span id="cd-draft-target"></span>
+        <button class="cd-work-action" type="button" id="cd-draft-close">Close</button>
+      </div>
+      <textarea id="cd-draft" spellcheck="false" autocomplete="off" placeholder="Draft a message for this session. Enter adds a new line." aria-describedby="cd-draft-status"></textarea>
+      <div class="cd-draft-foot">
+        <p id="cd-draft-status" role="status" aria-live="polite">Enter adds a line. Send &amp; Enter submits.</p>
+        <button class="cd-work-action" type="button" id="cd-draft-new">New draft</button>
+        <button class="cd-work-action" type="button" id="cd-draft-insert">Insert only</button>
+        <button class="cd-work-action" type="button" id="cd-draft-send">Send &amp; Enter</button>
+        <button class="cd-work-action" type="button" id="cd-draft-read" hidden>Read output</button>
+      </div>
+    </form>
     <div class="cd-usagebar" id="cd-usagebar" style="display:none"></div>
     <!-- Touch key bar: the TUI keys a phone keyboard doesn't have (Esc interrupts Claude,
          ⇧Tab cycles permission modes, arrows drive menus). Shown on coarse pointers only. -->
-    <div class="cd-keybar" id="cd-keybar">
+    <div class="cd-keybar" id="cd-keybar" aria-label="Terminal keys">
+      <button data-k="enter" aria-label="Enter" title="Enter — submit terminal input">↵<span class="cd-enter-label"> Enter</span></button>
       <button data-k="esc" title="Escape — interrupt Claude">esc</button>
       <button data-k="tab" title="Tab — autocomplete">tab</button>
       <button data-k="stab" title="Shift+Tab — cycle permission mode">⇧tab</button>
@@ -1305,7 +1339,8 @@
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/addon-fit.js"></script>
 <script src="/vendor/addon-search.js"></script>
-<script src="/vendor/terminal-ui.js?v=approval-telemetry1"></script>
+<script src="/vendor/terminal-workspace.js"></script>
+<script src="/vendor/terminal-ui.js?v=portable-workspace1"></script>
 <script>
 'use strict';
 const $=(id)=>document.getElementById(id);

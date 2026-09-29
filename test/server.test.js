@@ -11,7 +11,7 @@ const path = require('node:path');
 const http = require('node:http');
 const { randomBytes } = require('node:crypto');
 const { spawn, spawnSync } = require('node:child_process');
-const { decodeFrame, OPCODES } = require('../lib/wsframe');
+const { decodeFrame, encodeFrame, OPCODES } = require('../lib/wsframe');
 
 const project = path.resolve(__dirname, '..');
 
@@ -94,9 +94,14 @@ async function stopServer(child) {
   if (!child || child.exitCode != null) return;
   await new Promise((resolve) => { child.once('exit', resolve); child.kill('SIGTERM'); });
 }
-function cleanup({ home, socket }) {
+async function cleanup({ home, socket }) {
+  const panes = spawnSync('tmux', ['-L', socket, 'list-panes', '-a', '-F', '#{pane_pid}'], { encoding: 'utf8' });
+  const pids = String(panes.stdout || '').trim().split(/\s+/).map(Number).filter(n => Number.isSafeInteger(n) && n > 0);
   spawnSync('tmux', ['-L', socket, 'kill-server'], { stdio: 'ignore' });
-  fs.rmSync(home, { recursive: true, force: true });
+  // Wait for shell exit: tmux acknowledges shutdown before shells flush their history.
+  const live = pid => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  for (let n = 0; n < 100 && pids.some(live); n++) await new Promise(resolve => setTimeout(resolve, 20));
+  fs.rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });
 }
 
 const hasTmux = spawnSync('tmux', ['-V'], { stdio: 'ignore' }).status === 0;
@@ -159,6 +164,66 @@ function terminalRoundTrip(port, id) {
   });
 }
 
+test('history reader enforces requested limits and rejects invalid limits', { skip: !hasTmux }, async () => {
+  const s = scratch();
+  const { child, port } = await startServer(s, { SYSMON_MEM_FLOOR_MB: '0' });
+  try {
+    const session = await createShell(port, s.home);
+    const marker = path.join(s.home, 'history-ready');
+    spawnSync('tmux', ['-L', s.socket, 'send-keys', '-t', session.id, `seq 1 900; touch '${marker}'`, 'Enter']);
+    for (let i = 0; i < 100 && !fs.existsSync(marker); i++) await new Promise(resolve => setTimeout(resolve, 20));
+    assert.ok(fs.existsSync(marker), 'shell produced its history');
+    const result = await request(port, 'GET', `/api/term/dump?id=${session.id}&lines=50`);
+    const dump = JSON.parse(result.body);
+    assert.equal(result.status, 200);
+    assert.equal(dump.limit, 50);
+    assert.equal(dump.truncated, true);
+    assert.ok(dump.lines <= 50);
+    assert.match(dump.text, /900/);
+    for (const value of ['0', '-1', 'nope', '2.5']) {
+      const invalid = await request(port, 'GET', `/api/term/dump?id=${session.id}&lines=${value}`);
+      assert.equal(invalid.status, 400, value);
+      assert.equal(JSON.parse(invalid.body).ok, false);
+    }
+  } finally { await stopServer(child); await cleanup(s); }
+});
+
+function attachViewer(port, id) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, path: `/api/term/attach?id=${id}`, headers: {
+      ...sameOrigin(port), Connection: 'Upgrade', Upgrade: 'websocket',
+      'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': randomBytes(16).toString('base64'),
+    } });
+    req.on('error', reject);
+    req.on('response', res => { res.resume(); reject(new Error(`upgrade refused: ${res.statusCode}`)); });
+    req.on('upgrade', (_res, socket) => {
+      socket.on('data', () => {}); socket.on('error', () => {});
+      resolve({ socket, resize: (cols, rows) => socket.write(encodeFrame(OPCODES.TEXT,
+        Buffer.from(JSON.stringify({ t: 'r', c: cols, r: rows })))) });
+    });
+    req.end();
+  });
+}
+
+test('browser attachment receives its first size before tmux finishes attaching', { skip: !hasTmux || !hasScript, timeout: 15000 }, async () => {
+  const s = scratch();
+  const { child, port } = await startServer(s, { SYSMON_MEM_FLOOR_MB: '0' });
+  const viewers = [];
+  try {
+    const session = await createShell(port, s.home);
+    const clients = () => spawnSync('tmux', ['-L', s.socket, 'list-clients', '-t', session.id, '-F', '#{client_width}x#{client_height}'], { encoding: 'utf8' }).stdout.trim();
+    for (let round = 0; round < 3; round++) {
+      const viewer = await attachViewer(port, session.id); viewers.push(viewer);
+      viewer.resize(130 + round, 40 + round);
+      for (let i = 0; i < 100 && clients() !== `${130 + round}x${40 + round}`; i++) await new Promise(resolve => setTimeout(resolve, 20));
+      assert.equal(clients(), `${130 + round}x${40 + round}`);
+      viewer.socket.destroy();
+      for (let i = 0; i < 100 && clients(); i++) await new Promise(resolve => setTimeout(resolve, 20));
+      assert.equal(clients(), '');
+    }
+  } finally { for (const viewer of viewers) viewer.socket.destroy(); await stopServer(child); await cleanup(s); }
+});
+
 test('C locale preserves shell session identity and metadata after refresh', { skip: !hasTmux }, async () => {
   const s = scratch();
   const { child, port } = await startServer(s, { LANG: 'C', LC_ALL: 'C', SYSMON_MEM_FLOOR_MB: '0' });
@@ -175,7 +240,7 @@ test('C locale preserves shell session identity and metadata after refresh', { s
     assert.equal(sessions[0].codex, false);
     assert.equal(sessions[0].local, false);
     assert.ok(Number.isInteger(sessions[0].panePid) && sessions[0].panePid > 0);
-  } finally { await stopServer(child); cleanup(s); }
+  } finally { await stopServer(child); await cleanup(s); }
 });
 
 test('terminal WebSocket reaches the configured tmux socket with literal shell characters', { skip: !hasTmux || !hasScript }, async () => {
@@ -187,7 +252,7 @@ test('terminal WebSocket reaches the configured tmux socket with literal shell c
     const sessions = JSON.parse((await request(port, 'GET', '/api/term/sessions')).body).sessions;
     assert.ok(sessions.some((session) => session.id === created.id), 'API sees the same private session');
     await terminalRoundTrip(port, created.id);
-  } finally { await stopServer(child); cleanup(s); }
+  } finally { await stopServer(child); await cleanup(s); }
 });
 
 test('Git status filenames round-trip into unstaged and staged diffs', { skip: !hasTmux || !hasGit }, async () => {
@@ -235,7 +300,7 @@ test('Git status filenames round-trip into unstaged and staged diffs', { skip: !
       assert.match(result.diff, /^-before$/m, `before line for ${JSON.stringify(name)}`);
       assert.match(result.diff, /^\+after$/m, `after line for ${JSON.stringify(name)}`);
     }
-  } finally { await stopServer(child); cleanup(s); }
+  } finally { await stopServer(child); await cleanup(s); }
 });
 
 test('boots in an empty HOME and serves the cockpit routes', async () => {
@@ -264,7 +329,7 @@ test('boots in an empty HOME and serves the cockpit routes', async () => {
     const vendor = await request(port, 'GET', '/vendor/terminal-ui.js');
     assert.equal(vendor.status, 200);
     assert.match(vendor.body, /CommandDeckTerminal/);
-  } finally { await stopServer(child); cleanup(s); }
+  } finally { await stopServer(child); await cleanup(s); }
 });
 
 test('fleet-only routes do not exist', async () => {
@@ -275,7 +340,7 @@ test('fleet-only routes do not exist', async () => {
       const res = await request(port, 'GET', r, { headers: sameOrigin(port) });
       assert.equal(res.status, 404, `${r} should be gone (got ${res.status})`);
     }
-  } finally { await stopServer(child); cleanup(s); }
+  } finally { await stopServer(child); await cleanup(s); }
 });
 
 test('terminal plane: loopback GET works, origin-less POST and foreign Host are refused', async () => {
@@ -298,7 +363,7 @@ test('terminal plane: loopback GET works, origin-less POST and foreign Host are 
     const projects = JSON.parse((await request(port, 'GET', '/api/term/projects')).body);
     assert.ok(projects.projects.includes(s.home), 'HOME is always offered as a project directory');
     assert.ok(projects.projects.every((p) => p.startsWith(s.home)), 'nothing outside HOME is offered by default');
-  } finally { await stopServer(child); cleanup(s); }
+  } finally { await stopServer(child); await cleanup(s); }
 });
 
 test('SCHEME_PROJECT_DIRS adds existing absolute directories to the picker', async () => {
@@ -310,7 +375,7 @@ test('SCHEME_PROJECT_DIRS adds existing absolute directories to the picker', asy
     assert.ok(projects.includes(extra), 'existing dir listed');
     assert.ok(!projects.includes('/definitely/not/here'), 'missing dir skipped');
     assert.ok(!projects.some((p) => p.includes('relative/path')), 'relative entry skipped');
-  } finally { await stopServer(child); cleanup(s); fs.rmSync(extra, { recursive: true, force: true }); }
+  } finally { await stopServer(child); await cleanup(s); fs.rmSync(extra, { recursive: true, force: true }); }
 });
 
 test('no tailscale binary on PATH → Funnel guard is clear, terminal plane stays open', async () => {
@@ -321,7 +386,7 @@ test('no tailscale binary on PATH → Funnel guard is clear, terminal plane stay
     assert.doesNotMatch(output(), /tailscale present/);
     const list = await request(port, 'GET', '/api/term/sessions');
     assert.equal(list.status, 200, 'not 503: a box without tailscale cannot be Funnel-exposed');
-  } finally { await stopServer(child); cleanup(s); fs.rmSync(bare, { recursive: true, force: true }); }
+  } finally { await stopServer(child); await cleanup(s); fs.rmSync(bare, { recursive: true, force: true }); }
 });
 
 test('a detected Tailscale Funnel closes the terminal plane (503) but leaves the page readable', async () => {
@@ -337,7 +402,7 @@ test('a detected Tailscale Funnel closes the terminal plane (503) but leaves the
     assert.equal((await request(port, 'GET', '/')).status, 200, 'the page itself still loads');
     const stats = JSON.parse((await request(port, 'GET', '/api/stats')).body);
     assert.equal(stats.termLights, undefined, 'session data is stripped while exposed');
-  } finally { await stopServer(child); cleanup(s); fs.rmSync(fakeBin, { recursive: true, force: true }); }
+  } finally { await stopServer(child); await cleanup(s); fs.rmSync(fakeBin, { recursive: true, force: true }); }
 });
 
 test('SSE feed: the first frame carries vitals and the attention map', async () => {
@@ -350,7 +415,7 @@ test('SSE feed: the first frame carries vitals and the attention map', async () 
     assert.deepEqual(frame.termAttention, {}, 'no sessions → nothing needs input');
     assert.deepEqual(frame.termLights, {}, 'lights map present (an absent field means the walk failed)');
     assert.deepEqual(frame.openUrls, []);
-  } finally { await stopServer(child); cleanup(s); }
+  } finally { await stopServer(child); await cleanup(s); }
 });
 
 test('open-URL relay: a queued link rides the feed until acknowledged', async () => {
@@ -372,5 +437,5 @@ test('open-URL relay: a queued link rides the feed until acknowledged', async ()
     assert.equal(bad.status, 400);
     const ack = await request(port, 'POST', '/api/openurl/ack', { body: { id: 'nope' }, headers: sameOrigin(port) });
     assert.equal(ack.status, 200);
-  } finally { await stopServer(child); cleanup(s); }
+  } finally { await stopServer(child); await cleanup(s); }
 });

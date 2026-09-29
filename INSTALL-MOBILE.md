@@ -4,6 +4,8 @@
 
 Your phone displays Scheme; the work stays on your working computer. You need a browser and the Tailscale app on your phone. You do **not** install Node.js, coding agents, a local model, or a separate Scheme phone app.
 
+Physical iPhone and Android devices have not been validated for v1.1.0. The responsive controls were checked in browser emulation; the steps below are a connection guide, not a claim that every mobile browser or keyboard was exercised.
+
 First finish [working computer setup through step 5](INSTALL-HOST.md#5-connect-privately-with-tailscale). Leave that computer powered on and awake, with Scheme running. Keep the exact **https://…ts.net** address it printed.
 
 ## iPhone or iPad
@@ -35,6 +37,9 @@ For a home-screen shortcut, open Chrome's **⋮** menu and choose **Add to Home 
 - Use **＋ New** to start another session. The optional AI tools must already be installed on the working computer.
 - Tap inside the terminal when you want to type. The touch bar supplies keys a phone keyboard may not show, such as **Esc**, **Tab**, arrows, and **Ctrl+C**. Ctrl+C interrupts the current command.
 - Swipe inside the terminal to scroll. Rotate the phone to landscape for wider lines.
+- On narrow touch layouts, **Read** opens a plain-text snapshot: **Refresh** gets new output, **More history** retrieves earlier lines, and copy/wrap/text-size controls help with long text. It is not a live stream.
+- **Write** opens a separate draft for the current session. **Insert only** pastes without submitting; **Send & Enter** pastes and submits. Drafts are temporary browser-tab storage, so keep important text elsewhere too.
+- Use **Tools** for additional controls such as **Focus**, **Usage**, and telemetry. [The capability guide](CAPABILITIES.md#read-and-write-on-a-smaller-screen) explains the limits.
 - Returning after locking the screen may require a moment to reconnect or a page refresh. The working computer's sessions can continue while the mobile browser is suspended.
 - Closing a browser page disconnects it; closing a **session** in Scheme ends that session. Do not close a session to “log out.”
 

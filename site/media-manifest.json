@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "repository": "buffbeefalo/scheme",
+  "releaseTag": "v1.1.0",
+  "reviewed": false,
+  "assets": [
+    {
+      "path": "media/scheme-product.mp4",
+      "source": "release",
+      "sha256": "",
+      "bytes": 0
+    },
+    {
+      "path": "media/scheme-setup.mp4",
+      "source": "release",
+      "sha256": "",
+      "bytes": 0
+    },
+    {
+      "path": "captions/scheme-product.vtt",
+      "source": "repository",
+      "sha256": "",
+      "bytes": 0
+    },
+    {
+      "path": "captions/scheme-setup.vtt",
+      "source": "repository",
+      "sha256": "",
+      "bytes": 0
+    },
+    {
+      "path": "transcripts/product-transcript.md",
+      "source": "repository",
+      "sha256": "",
+      "bytes": 0
+    },
+    {
+      "path": "transcripts/setup-transcript.md",
+      "source": "repository",
+      "sha256": "",
+      "bytes": 0
+    }
+  ],
+  "films": [
+    {
+      "id": "product",
+      "durationSeconds": 88.0,
+      "width": 1920,
+      "height": 1080,
+      "chapters": [
+        {
+          "time": 0.0,
+          "title": "Your work has a home."
+        },
+        {
+          "time": 8.342,
+          "title": "One working computer."
+        },
+        {
+          "time": 18.559,
+          "title": "Start with a simple hello."
+        },
+        {
+          "time": 27.093,
+          "title": "A place for each thread."
+        },
+        {
+          "time": 37.653,
+          "title": "Find your way back."
+        },
+        {
+          "time": 48.062,
+          "title": "Close the screen."
+        },
+        {
+          "time": 59.433,
+          "title": "Make room to think."
+        },
+        {
+          "time": 68.717,
+          "title": "Keep the host awake."
+        },
+        {
+          "time": 80.109,
+          "title": "Scheme"
+        }
+      ]
+    },
+    {
+      "id": "setup",
+      "durationSeconds": 504.2,
+      "width": 1920,
+      "height": 1080,
+      "chapters": [
+        {
+          "time": 0.0,
+          "title": "Set up Scheme"
+        },
+        {
+          "time": 31.158,
+          "title": "Choose the working computer"
+        },
+        {
+          "time": 60.057,
+          "title": "Install the small prerequisites"
+        },
+        {
+          "time": 95.042,
+          "title": "Check Node.js"
+        },
+        {
+          "time": 131.837,
+          "title": "Download and extract Scheme"
+        },
+        {
+          "time": 166.585,
+          "title": "Run the setup check"
+        },
+        {
+          "time": 201.761,
+          "title": "Start the dashboard"
+        },
+        {
+          "time": 237.487,
+          "title": "Open your first terminal"
+        },
+        {
+          "time": 273.515,
+          "title": "Connect a second desktop"
+        },
+        {
+          "time": 313.489,
+          "title": "Use a phone or tablet"
+        },
+        {
+          "time": 352.689,
+          "title": "Add the tools you use"
+        },
+        {
+          "time": 394.346,
+          "title": "Let Scheme start automatically"
+        },
+        {
+          "time": 429.517,
+          "title": "Know what survives"
+        },
+        {
+          "time": 466.758,
+          "title": "Your first session is ready"
+        }
+      ]
+    }
+  ]
+}

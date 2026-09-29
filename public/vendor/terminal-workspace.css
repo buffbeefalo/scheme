@@ -1,0 +1,208 @@
+/* Phone controls are gated in CSS before JavaScript boots. Keep this query in sync
+ * with terminal-workspace.js; narrow mouse and wide touch screens use desktop presentation. */
+.cd-work-action, .cd-reader-session, .cd-reader-tools, .cd-draft-panel { display: none; }
+.cd-work-action[hidden] { display: none; }
+
+/* Long names can wrap to a second line without pushing the active tab out of reach. */
+.cd-bar .cd-sess { max-width: min(100%, 310px); }
+.cd-bar .cd-sess .nm { min-width: 0; max-width: 240px; white-space: normal; overflow-wrap: anywhere; line-height: 1.3; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.cd-bar .cd-sess .cd-dot, .cd-bar .cd-sess .cd-x, .cd-bar .cd-sess .cd-rtag { flex-shrink: 0; }
+.cd-bar .cd-sess[data-state="unknown"] .cd-dot,
+.cd-bar .cd-sess[data-state="connected"] .cd-dot { background: var(--faint); animation: none; box-shadow: none; }
+.cd-bar .cd-sess[data-state="offline"] .cd-dot { background: var(--red2); animation: none; box-shadow: none; }
+.cd-bar .cd-sess[data-state="connecting"] .cd-dot { background: var(--yellow); box-shadow: none; }
+.cd-sw-row .cd-dot[data-s="unknown"], .cd-sw-row .cd-dot[data-s="connected"] { background: var(--faint); }
+.cd-sw-row .cd-dot[data-s="offline"] { background: var(--red2); }
+.cd-sw-row .cd-dot[data-s="connecting"] { background: var(--yellow); }
+.cd-sw-row .sw-state[data-s="offline"] { color: var(--red2); }
+.cd-sw-row .sw-state[data-s="unknown"], .cd-sw-row .sw-state[data-s="connected"] { color: var(--mut); }
+.cd-sw-row .sw-attn[hidden] { display: none; }
+.cd-count[data-agg="offline"] i { color: var(--red2); }
+.cd-count[data-agg="unknown"] i { color: var(--mut); }
+
+@media (max-width:700px) and (pointer:coarse) {
+  #cd-copytext { display: none; }
+  body.term-tab { position: fixed; top: var(--cd-viewport-top, 0px); left: 0; right: 0; height: var(--cd-viewport-height, 100dvh); min-height: 0; }
+  body.term-tab #source-status { display: none; }
+  .cd-work-action {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px; padding: 0 12px; border: 1px solid var(--line2);
+    border-radius: 10px; background: var(--s2); color: var(--txt); font: 600 14px var(--ui);
+    cursor: pointer; flex: none; touch-action: manipulation;
+  }
+  .cd-work-action[aria-expanded="true"], .cd-work-action[aria-pressed="true"] { background: var(--sage); border-color: var(--green); }
+  .cd-work-action:focus-visible, .cd-reader-tools button:focus-visible, #cd-draft:focus-visible {
+    outline: 2px solid var(--cyan); outline-offset: 2px;
+  }
+  .cd-work-action:disabled { opacity: .5; cursor: default; }
+  .cd-bar .cd-work-action { order: 0; }
+  #cd-copypanel { inset: 0; border-radius: 12px; animation: none; overflow: hidden; }
+  .cd-copyhead { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  .cd-copytitle { font-size: 14px; letter-spacing: 0; text-transform: none; }
+  .cd-copyhead .cd-copyhint { order: 4; flex: 1 0 100%; font: 12px/1.5 var(--ui); color: var(--mut); }
+  .cd-reader-session { display: block; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--ui); color: var(--mut); }
+  .cd-copyhead button { min-height: 44px; padding: 0 12px; font-size: 13px; text-transform: none; letter-spacing: 0; }
+  .cd-reader-tools { display: flex; flex: none; flex-wrap: wrap; gap: 5px; padding: 4px 10px 8px; border-bottom: 1px solid var(--line); }
+  .cd-reader-tools button { min-width: 44px; min-height: 44px; padding: 0 10px; font: 500 13px var(--ui); border: 1px solid var(--line2); border-radius: 8px; background: transparent; color: var(--txt); cursor: pointer; }
+  .cd-reader-tools button[aria-pressed="true"] { background: var(--sage); }
+  .cd-reader-tools button:disabled { opacity: .45; }
+  #cd-copyarea { min-height: 0; min-width: 0; font-size: 16px; line-height: 1.65; padding: 16px; tab-size: 2; overscroll-behavior: contain; touch-action: pan-x pan-y; border-radius: 0; }
+  .cd-draft-panel { display: flex; flex-direction: column; min-height: 0; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--line2); border-radius: 12px; background: var(--s2); }
+  .cd-draft-panel[hidden] { display: none; }
+  /* Share the stage's grid cell so editing gets the available height. The terminal
+     stays mounted behind the editor and continues receiving output. */
+  .cd-studio.draft-open { display: grid !important; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); }
+  .cd-studio.draft-open > .cd-bar { grid-area: 1 / 1; }
+  .cd-studio.draft-open > .cd-stagewrap, .cd-studio.draft-open > .cd-draft-panel { grid-area: 2 / 1; }
+  .cd-studio.draft-open > .cd-stagewrap { visibility: hidden; pointer-events: none; }
+  .cd-studio.draft-open #cd-usagebar { display: none !important; }
+  .cd-studio.draft-open > .cd-draft-panel { z-index: 1; }
+  .cd-studio.draft-open .cd-keybar, .cd-studio.reader-open .cd-keybar { display: none !important; }
+  .cd-draft-head, .cd-draft-foot { display: flex; align-items: center; gap: 8px; }
+  .cd-draft-head { flex: none; }
+  .cd-draft-head label { font: 600 16px var(--ui); flex: none; }
+  #cd-draft-target { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px var(--ui); color: var(--mut); }
+  #cd-draft-close { min-height: 44px; }
+  #cd-draft { display: block; flex: 1; width: 100%; height: 0; min-height: 0; max-height: none; resize: none; margin: 10px 0; padding: 12px; border: 1px solid var(--line2); border-radius: 8px; background: var(--field); color: var(--txt); font: 16px/1.6 var(--mono); tab-size: 2; overscroll-behavior: contain; }
+  .cd-draft-foot { flex: none; }
+  #cd-draft-status { flex: 1 0 100%; min-width: 0; margin: 0; font: 13px/1.45 var(--ui); color: var(--mut); }
+  #cd-draft-send { min-height: 48px; padding: 0 16px; color: var(--s2); background: var(--ink); border-color: var(--ink); }
+  #cd-draft-insert, #cd-draft-send, #cd-draft-read { flex: 1; }
+  #cd-reader-earlier { margin: 6px 10px; }
+  body.cd-focus.term-tab header, body.cd-focus.term-tab nav.tabs, body.cd-focus.term-tab .critbar,
+  body.cd-focus.term-tab .dock { display: none; }
+  body.cd-focus.term-tab { padding-bottom: 0; }
+  body.cd-focus.term-tab #view-terminal { padding: 4px; }
+  body.cd-focus.term-tab #cd-usagebar { display: none !important; }
+  #cd-studio:not(.usage-expanded) #cd-usagebar { display: none !important; }
+  body.term-tab #view-terminal.active { padding: 5px; align-items: stretch; }
+  .cd-bar {
+    display: grid; grid-template-columns: 44px 44px minmax(44px, 1fr) minmax(44px, 1fr) 68px;
+    gap: 6px; padding: 6px; margin-bottom: 6px;
+  }
+  .cd-bar #cd-new { grid-area: 2 / 1; }
+  .cd-bar #cd-img { grid-area: 2 / 2; }
+  .cd-bar #cd-read { grid-area: 2 / 3; }
+  .cd-bar #cd-write { grid-area: 2 / 4; }
+  .cd-bar #cd-tools { grid-area: 2 / 5; }
+  .cd-bar .cd-lane { display: flex; grid-column: 1 / -1; grid-row: 1; gap: 4px; }
+  .cd-bar #cd-prev, .cd-bar #cd-next, #cd-count-off { display: none; }
+  .cd-bar #cd-switch { width: 44px; min-width: 44px; padding: 0; justify-content: center; }
+  .cd-bar .cd-sessions { padding: 0; gap: 4px; }
+  .cd-bar .cd-sess .nm { max-width: none; min-width: 0; flex: 1; }
+  .cd-lane-track { height: 6px; margin: 0 2px; }
+  .cd-bar.tools-open .cd-well {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 32;
+    padding: 8px; margin: 0; background: var(--s2); border: 1px solid var(--line2); border-radius: 10px;
+    max-height: min(240px, calc(var(--cd-viewport-height, 100dvh) - 160px)); overflow-y: auto;
+    box-shadow: 0 8px 20px rgba(29,43,31,.18);
+  }
+  .cd-bar .cd-newbtn, .cd-bar .cd-zoom { width: 44px; height: 44px; }
+  #cd-img::before { content: none; }
+  #cd-img svg { width: 18px; height: 18px; }
+  .cd-bar #cd-tools { margin: 0; padding: 0 6px; min-height: 44px; font-size: 13px; text-transform: none; letter-spacing: 0; }
+  .cd-bar .cd-sess { min-height: 44px; padding-top: 4px; padding-bottom: 4px; }
+  .cd-bar .cd-sess .nm { font-size: 14px; }
+  .cd-bar .cd-sess .cd-x { padding: 6px; }
+  .cd-keybar { gap: 5px; padding: 5px; margin-top: 5px; border-radius: 10px; }
+  .cd-keybar button { height: 44px; min-width: 44px; padding: 0 10px; font-size: 14px; }
+  .cd-keybar button[data-k="enter"] { background: var(--sage); color: var(--txt); }
+  .cd-term { inset: 8px 18px 6px 8px; }
+  #cd-sessions .cd-rtag { display: none; }
+  #cd-sw-q, #cd-label, #cd-proj, #cd-notes { font-size: 16px; }
+  .cd-sw-row .sw-top { flex-wrap: wrap; column-gap: 6px; }
+  .cd-sw-row .sw-nm { flex-basis: 100%; font-size: 14px; }
+  .cd-sw-row .sw-state { font-size: 10px; }
+  .cd-sw-row .sw-meta { font-size: 11px; }
+  .cd-sw-row .sw-focus .sw-task { font-size: 13px; }
+  .cd-sw-row .sw-focus .sw-ask { font-size: 12px; }
+  .cd-reader-session { flex-basis: 80px; }
+  #cd-copypanel .cd-copyhead { gap: 6px; padding: 6px 10px; }
+  #cd-copyarea { padding: 12px; }
+  body.cd-keyboard.term-tab .dock, body.cd-keyboard.term-tab header,
+  body.cd-keyboard.term-tab nav.tabs, body.cd-keyboard.term-tab .critbar,
+  body.cd-keyboard.term-tab #cd-usagebar { display: none !important; }
+  body.cd-keyboard.term-tab { padding-bottom: 0; }
+  body.cd-keyboard .cd-studio.draft-open > .cd-bar { display: none; }
+  @media (max-height: 500px) {
+    body.term-tab .dock, body.term-tab header, body.term-tab nav.tabs, body.term-tab .critbar { display: none; }
+    body.term-tab { padding-bottom: 0; }
+    .cd-draft-panel { padding: 6px 8px; }
+    #cd-draft { margin: 6px 0; padding: 8px; }
+    .cd-copyhead .cd-copyhint { display: none; }
+  }
+
+  /* Narrow phones: use the actual CSS viewport width. */
+  @media (max-width: 420px) {
+    body.term-tab #view-terminal.active { padding: 4px; }
+    body.term-tab { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
+    body.cd-focus.term-tab, body.cd-keyboard.term-tab { padding-bottom: 0; }
+    .cd-bar {
+      display: grid; grid-template-columns: 44px 44px minmax(44px, 1fr) minmax(44px, 1fr) 60px;
+      gap: 4px; padding: 4px; margin-bottom: 4px; border-radius: 10px;
+    }
+    .cd-bar > .cd-work-action { padding: 0 6px; border-radius: 8px; }
+    .cd-bar .cd-sess { padding: 4px 6px 4px 10px; border-radius: 8px; }
+    .cd-term { inset: 6px 16px 5px 6px; }
+    #view-terminal #cd-host, #cd-copypanel { border-radius: 9px; }
+    .cd-keybar { gap: 4px; padding: 4px; margin-top: 4px; }
+    .cd-keybar button { flex: 0 0 44px; width: 44px; padding: 0; font-size: 13px; }
+    .cd-enter-label { display: none; }
+    #cd-copypanel .cd-copyhead { padding: 6px; gap: 5px; }
+    .cd-reader-session { flex-basis: 0; }
+    .cd-copyhead button { padding: 0 9px; }
+    .cd-reader-tools { display: grid; grid-template-columns: repeat(6, minmax(44px, 1fr)); padding: 4px 6px 6px; gap: 4px; }
+    .cd-reader-tools button { padding: 0; min-width: 0; }
+    #cd-copyarea { padding: 12px; line-height: 1.65; }
+    .cd-draft-panel { padding: 6px; border-radius: 9px; }
+    .dock {
+      overflow-x: auto; overflow-y: hidden; gap: 4px; padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+      scroll-padding-inline: 6px; overscroll-behavior-x: contain; touch-action: pan-x;
+      scrollbar-width: thin; scrollbar-color: var(--line3) transparent;
+    }
+    .dock button { flex: 1; min-width: 64px; min-height: 48px; font-size: 11px; padding: 4px 2px; }
+    .dock button.active { background: var(--sage); }
+    .dock button.active::after { display: none; }
+    .dock::-webkit-scrollbar { height: 3px; }
+    .dock::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--line3); }
+  }
+  @media (max-width: 420px) and (max-height: 500px) {
+    body.term-tab { padding-bottom: 0; }
+  }
+}
+
+/* Wrap narrow touch draft controls and reclaim toolbar space in short viewports. */
+@media (max-width:700px) and (pointer:coarse) {
+  .cd-draft-foot { flex-wrap: wrap; }
+  #cd-draft-status { flex: 1 0 100%; overflow-wrap: anywhere; }
+  .cd-draft-foot button {
+    box-sizing: border-box; min-width: 44px; min-height: 44px; max-width: 100%;
+    white-space: normal; overflow-wrap: anywhere;
+  }
+  @media (max-height:500px) {
+    .cd-studio.draft-open > .cd-bar { display: none; }
+  }
+}
+
+/* Session switcher focus lines: WHERE the tab is working (project folder) and WHAT it was last asked
+   (lib/tab-focus.js). One line each, clipped, full text on hover — the glance answer for every tab. */
+.cd-sw-row .sw-focus { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cd-sw-row .sw-task, .cd-sw-row .sw-where, .cd-sw-row .sw-ask, .cd-sw-row .sw-act { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--ui); }
+.cd-sw-row .sw-where { font-size: 10.5px; font-weight: 600; color: var(--mut); }
+.cd-sw-row .sw-ask { font-size: 11.5px; color: var(--txt); }
+.cd-sw-row .sw-act { font-size: 10.5px; color: var(--mut); }
+.cd-sw-row .sw-task { font-size: 12px; font-weight: 600; color: var(--txt); }
+.cd-sw-row .sw-task b, .cd-sw-row .sw-ask b, .cd-sw-row .sw-act b { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--dim); margin-right: 3px; font-style: normal; }
+.cd-sw-row .sw-where.none, .cd-sw-row .sw-ask.none { font-weight: 400; font-style: italic; color: var(--faint); }
+/* Rows are two lines taller with the focus lines, so give the list room for ~8 tabs before it scrolls. */
+.cd-switcher { max-height: min(78vh, 720px); }
+/* Wide screens show two columns in ordinary reading order. */
+@media (min-width: 1100px) {
+  .cd-sw-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; align-content: start; }
+  .cd-sw-list > .cd-sw-empty { grid-column: 1 / -1; }
+}
+/* The count button opens the all-tabs overview; say so in words wherever it is not the phone's
+   44px square ("6 tabs · 5 off-screen ▾" rather than a bare "6 ▾"). */
+@media (min-width: 701px), (pointer: fine) {
+  #cd-count-n::after { content: " tabs"; font-weight: 600; }
+}

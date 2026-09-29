@@ -6,7 +6,7 @@ Start with the last step that worked. A successful Shell test on the working com
 
 ## I cannot find the Scheme folder
 
-A ZIP is a package of files. Extract it first, then open the extracted **scheme-main** folder. You should see `README.md`, `server.js`, and `bin` inside it.
+A ZIP is a package of files. Extract it first, then open the extracted **scheme-1.1.0** release folder, or **scheme-main** if you chose the latest main branch. You should see `README.md`, `server.js`, and `bin` inside it.
 
 On Ubuntu, right-click empty space inside that folder and choose **Open in Terminal**. Or type `cd ` in Terminal, drag the folder into the window, and press Enter. Run `ls`: if those files are absent, you are in the wrong place.
 
@@ -40,7 +40,7 @@ A **lock card** means Scheme refused the terminal connection. Use the documented
 
 ## A new tab says low memory
 
-Scheme's default reserve is 8,000 MiB of available memory on Linux. This commonly blocks an 8 GB computer. For Shell or cloud tools, follow the [smaller-host example](INSTALL-HOST.md#memory-on-smaller-hosts). Close other workloads or reduce the number of sessions. A local model needs its own extra RAM/VRAM and may need a smaller model; lowering the guard does not create memory.
+Scheme's default reserve is 8,000 MiB of available memory on Linux. This commonly blocks an 8 GiB computer, including the release’s clean test host. For Shell or cloud tools, follow the [smaller-host example](INSTALL-HOST.md#memory-on-smaller-hosts). Close other workloads or reduce the number of sessions. A local model needs its own extra RAM/VRAM and may need a smaller model; lowering the guard does not create memory.
 
 ## An AI tab closes or returns to a command prompt
 
@@ -49,6 +49,8 @@ The optional tool may be missing, unsigned-in, or rejecting an option. On the wo
 For a Claude error about **--effort**, set a supported effort option or an empty value before starting Scheme. The [Claude effort setting](CONFIGURATION.md#claude-effort-setting) applies to new and resumed cloud sessions.
 
 For **Ollama not reachable**, start Ollama on the working computer and keep the wrapper pointed at its local address. For **model is not pulled**, use `ollama list` to check the exact downloaded name; pull the intended model if your hardware has enough memory and disk. The Local LLM lane also needs the Claude Code program. It does not silently switch to a cloud model when its preflight fails.
+
+For **Prompt is too long** with a local model, inspect its configured context size in Ollama as well as the client’s reported size. The release’s small-model connectivity test needed a 32,768-token model context and matching client setting. Changing only `CLAUDE_CODE_MAX_CONTEXT_TOKENS` does not allocate that context inside Ollama. A larger context also needs more memory.
 
 Model, context, or account meters may be missing if the installed tool version does not provide the expected local telemetry. A missing meter does not mean the terminal itself is broken or the account has zero usage.
 
@@ -64,13 +66,15 @@ Changing the launcher's locale does not repair an already running tmux server. S
 
 | What happened | What to expect |
 |---|---|
-| Browser closed, phone locked, or network dropped | The display disconnects. Sessions may keep running while the working computer stays awake. Reopen the page with the private connection restored. |
+| Browser closed, phone locked, or network dropped | The display disconnects. Sessions can keep running while the working computer stays awake. The desktop test confirmed a job completed while the viewing browser was fully closed. Reopen the page with the private connection restored. |
 | Foreground Scheme server restarted | Existing tmux sessions normally remain and can be reattached. |
-| Linux background service restarted | The supplied service leaves tmux sessions running. |
+| Linux background service restarted | The supplied service leaves tmux sessions running. In the Ubuntu desktop test, the terminal process stayed the same and its unfinished job completed. |
 | Working computer went to sleep | Work pauses until it wakes, and the connection drops. |
 | Working computer rebooted or tmux was stopped | Running processes are lost. Scheme attempts to recreate saved tabs after it starts again. Shell starts fresh; supported AI conversations may resume from saved identifiers. |
 
 Reopening a conversation is not restoring the running process. Unsaved command state and long-running shell jobs do not survive a reboot. Recovery also depends on your installed tool version, saved conversation identifiers, sign-in, and project folders.
+
+If a Codex tab says recovery is paused, Scheme could not verify the saved history as the intended interactive CLI conversation. It keeps the tab and history instead of resuming an uncertain match. Inspect the notice and the original tool history before deciding to start a fresh session. Update an older Codex CLI if it rejects `--no-daemon`; this release requires that option.
 
 If new tabs also fail after reboot, run `bin/scheme-doctor` and inspect the Scheme logs. Check the reported tmux error before changing socket directories or permissions.
 
@@ -83,6 +87,8 @@ On Linux, inspect `systemctl --user status scheme` and `journalctl --user -u sch
 ## Phone keyboard or scrolling problems
 
 Use an up-to-date browser. Tap inside the terminal to bring back the keyboard. Try landscape orientation for more room, close and reopen the keyboard, or reload the page after reconnecting. These problems can be browser or device specific; the page's resize handling is not a guarantee for every mobile keyboard.
+
+On narrow touch layouts, **Read** is a snapshot: press **Refresh** to get later output. **More history** retrieves a bounded earlier portion and can report truncation. **Write** stores a separate temporary draft per session; **Insert only** does not press Enter. If the terminal is not ready for pasted input, wait for the prompt and reconnect rather than repeatedly pressing Send. [Controls explained](CAPABILITIES.md#read-and-write-on-a-smaller-screen).
 
 If a Claude session's full-screen renderer has no scrollback, try a fresh Scheme tab. Scheme requests its inline renderer for new sessions. Tool versions and renderer settings can affect this; report the tool and browser versions if the problem remains.
 

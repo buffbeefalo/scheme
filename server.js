@@ -23,6 +23,8 @@ const { execFile, execFileSync, spawn } = require('child_process');
 
 const metrics = require('./lib/metrics');
 const terminal = require('./lib/terminal');
+const registry = require('./lib/registry');
+const taskResolver = require('./lib/tab-task').createTaskResolver();
 const { runtimeOf, runtimeConflict } = require('./lib/runtime');
 const { analyzeTranscript } = require('./lib/telemetry');
 const { analyzeCodexRollout, codexTranscriptPath, resolveCodexRollout } = require('./lib/codex-telemetry');
@@ -45,7 +47,9 @@ const { boundedWrite, writeWithBackpressure } = require('./lib/backpressure');
 // Scrub the CLAUDE_CODE_* leak from our OWN env before we spawn anything. If this server was
 // started from inside a Claude Code session, every terminal it launches would otherwise inherit a
 // stale session identity and boot as a nested child that writes no transcript (dead lights).
-for (const k of ['CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_EXECPATH', 'CLAUDE_CODE_TMPDIR', 'AI_AGENT', 'CODEX_COMPANION_SESSION_ID']) {
+for (const k of ['CLAUDE_CODE_CHILD_SESSION', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_EXECPATH', 'CLAUDE_CODE_TMPDIR', 'AI_AGENT',
+  'CLAUDECODE', 'CLAUDE_PID', 'CLAUDE_CODE_MESSAGING_SOCKET', 'CLAUDE_CODE_MESSAGING_TOKEN',
+  'CODEX_THREAD_ID', 'CODEX_SESSION_ID', 'CODEX_CI', 'CODEX_VERSION', 'CODEX_COMPANION_SESSION_ID']) {
   delete process.env[k];
 }
 
@@ -244,12 +248,14 @@ const lightsCollector = require('./lib/lights').createLightsCollector({
   loadCodexTelemetry,
   codexJournalStatKey,
   backfillCodexUuid: (s, all) => terminal.backfillCodexUuid(s, all),
+  taskFor: taskResolver.taskFor,
   contextWindowFor,
   warn: (m) => console.warn(m),
 });
 const IDLE_TMUX_FORMAT = '#{session_name}\t#{session_activity}\t#{session_created}\t#{pane_current_command}';
 const idleCloser = idleclose.createIdleCloser({
   listSessions: () => terminal.listSessions(),
+  readRegistry: () => registry.readAll(),
   tmuxActivity: async () => {
     const out = await run(terminal.TMUX_BIN, terminal.tmuxArgs(['list-sessions', '-F', IDLE_TMUX_FORMAT]), 5000);
     const map = {};
@@ -557,15 +563,19 @@ const server = http.createServer(async (req, res) => {
           switch (rt) {
             case 'shell': tel = { runtime: 'shell' }; started = true; break;
             case 'codex': {
-              const cfile = sess.codexUuid ? codexTranscriptPath(sess.codexUuid) : null;
-              const ctext = cfile ? await readTail(cfile, full ? 40000 : 4000, (full ? 8 : 1) * 1024 * 1024) : '';
-              tel = loadCodexTelemetry(sess, ctext); tel.runtime = 'codex'; started = !!ctext;
+              try { await terminal.backfillCodexUuid(sess, await terminal.listSessions()); } catch {}
+              const rollout = sess.codexUuid && sess.codexIdentityVerified !== false ? resolveCodexRollout(sess.codexUuid) : null;
+              const ctext = rollout ? await readTail(rollout.path, full ? 40000 : 4000, (full ? 8 : 1) * 1024 * 1024) : '';
+              tel = sess.codexIdentityVerified === false ? analyzeCodexRollout('') : loadCodexTelemetry(sess, ctext, rollout ? { rollout } : {});
+              tel.runtime = 'codex'; started = !!ctext;
+              tel.task = await taskResolver.taskFor(sess, 'codex', rollout?.path);
               break;
             }
             case 'claude': case 'local': {
               const file = terminal.transcriptPath(sess.cwd, sess.uuid);
               const text = file ? await readTail(file, full ? 40000 : 4000, (full ? 8 : 1) * 1024 * 1024) : '';
               tel = analyzeTranscript(text); tel.runtime = rt; tel.contextWindow = contextWindowFor(tel.model); started = !!text;
+              tel.task = await taskResolver.taskFor(sess, rt, file);
               break;
             }
             default: return sendJson(res, 500, { ok: false, error: 'unknown runtime' });
@@ -618,8 +628,10 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 200, await terminal.scrollState(id));
       }
       if (req.method === 'GET' && route === '/api/term/dump') {
-        let id = ''; try { id = new URL(req.url, 'http://x').searchParams.get('id') || ''; } catch {}
-        return sendJson(res, 200, await terminal.captureScrollback(id));
+        let id = '', lines = null;
+        try { const q = new URL(req.url, 'http://x').searchParams; id = q.get('id') || ''; lines = q.get('lines'); } catch {}
+        const result = await terminal.captureScrollback(id, lines === null ? {} : { lines });
+        return sendJson(res, result.ok ? 200 : 400, result);
       }
       if (req.method === 'POST' && route === '/api/term/scroll') {
         const g = await guardedControlBody(req, res, 'termBody'); if (!g.ok) return;
@@ -694,9 +706,11 @@ function ptyArgs(cmd) {
 function bridgeSession(socket, id) {
   const cmd = [terminal.TMUX_BIN, ...terminal.tmuxArgs(terminal.tmuxAttachArgs(id))].map(terminal.shquote).join(' ');
   const child = spawn('script', ptyArgs(cmd), { env: { ...process.env, TERM: 'xterm-256color' } });
+  const attachment = terminal.createAttachmentResizer(id, child);
   let alive = true;
   const closeAll = () => {
     if (!alive) return; alive = false;
+    attachment.close();
     try { child.stdin.end(); } catch {}
     try { child.kill('SIGTERM'); } catch {}
     try { socket.end(); } catch {}
@@ -718,9 +732,10 @@ function bridgeSession(socket, id) {
       if (![OPCODES.TEXT, OPCODES.BINARY, OPCODES.CONT].includes(f.opcode)) continue;
       let m = null; try { m = JSON.parse(f.payload.toString('utf8')); } catch { continue; }
       if (m && m.t === 'd' && typeof m.d === 'string') { try { child.stdin.write(m.d); } catch {} }
-      else if (m && m.t === 'r') terminal.resize(id, m.c, m.r);
+      else if (m && m.t === 'r') attachment.resize(m.c, m.r).catch(closeAll);
     }
   });
+  socket.on('end', closeAll);
   socket.on('close', closeAll);
   socket.on('error', closeAll);
 }

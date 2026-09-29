@@ -2,7 +2,7 @@
 
 [Home](README.md) · [Working computer setup](INSTALL-HOST.md)
 
-Scheme runs on your working computer. The other device only needs a browser and a private connection. Start with **Tailscale** for both desktop and phone; it gives you one HTTPS address to bookmark.
+Scheme runs on your working computer. The other device only needs a browser and a private connection. Use an **SSH tunnel** if you already have SSH access from a desktop, or **Tailscale** for a private HTTPS address you can also open on a phone. The release desktop test used SSH; real Tailscale sign-in remains unverified.
 
 | Device | Step-by-step guide |
 |---|---|
@@ -10,7 +10,7 @@ Scheme runs on your working computer. The other device only needs a browser and 
 | iPhone, iPad, or Android | [Phone and tablet setup](INSTALL-MOBILE.md) |
 | A second monitor on the same computer | Open <http://localhost:3000> on the working computer and move the browser to that monitor. |
 
-## A. Same network — SSH tunnel
+## A. Existing SSH access — tunnel
 
 Already comfortable with SSH? The [desktop SSH alternative](INSTALL-DESKTOP.md#alternative-connection-with-ssh) includes explicit local binding and a connection check.
 

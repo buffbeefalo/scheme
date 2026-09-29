@@ -340,7 +340,7 @@ test('findCodexSessionUuid picks the newest matching-cwd, recent, unclaimed roll
       const f = path.join(day, `rollout-${tsName}-${uuid}.jsonl`);
       const payloadTimestamp = tsName.replace(/T(\d\d)-(\d\d)-(\d\d)$/, 'T$1:$2:$3') + '.000Z';
       const timestamp = new Date(Date.parse(payloadTimestamp) + 60_000).toISOString();
-      fs.writeFileSync(f, JSON.stringify({ type: 'session_meta', timestamp, payload: { id: uuid, cwd: metaCwd, timestamp: payloadTimestamp } }) + '\n');
+      fs.writeFileSync(f, JSON.stringify({ type: 'session_meta', timestamp, payload: { id: uuid, cwd: metaCwd, timestamp: payloadTimestamp, source: 'cli' } }) + '\n');
       return f;
     };
     const uOld = '019f0000-0000-0000-0000-000000000001';
@@ -363,7 +363,7 @@ test('findCodexSessionUuid picks the newest matching-cwd, recent, unclaimed roll
 
 function candidateFile(day, uuid, cwd, timestamp, payloadTimestamp, extra = '') {
   const file = path.join(day, `rollout-${timestamp.replace(/[.:]/g, '-')}-${uuid}.jsonl`);
-  fs.writeFileSync(file, JSON.stringify({ type: 'session_meta', timestamp, payload: { id: uuid, cwd, timestamp: payloadTimestamp }, extra }) + '\n');
+  fs.writeFileSync(file, JSON.stringify({ type: 'session_meta', timestamp, payload: { id: uuid, cwd, timestamp: payloadTimestamp, source: 'cli' }, extra }) + '\n');
   return file;
 }
 

@@ -158,12 +158,10 @@ test('launchCmd: picker model injects --model for local tabs only (default & clo
   const glm = T.launchCmd(uuid, '', true, 'glm-4.7-flash');
   assert.ok(glm.includes('claude-local'), 'local bin');
   assert.ok(glm.includes('--model glm-4.7-flash'), 'model flag injected');
-  // default local tab: NO --model flag → wrapper default (ornith:9b since the 2026-07-10 promotion)
+  // Default local tabs inherit the public launcher configuration.
   assert.ok(!T.launchCmd(uuid, '', true).includes('--model'));
   assert.ok(!T.launchCmd(uuid, '', true, null).includes('--model'));
-  assert.ok(!T.launchCmd(uuid, '', true, 'ornith:9b').includes('--model'), 'ornith is the new default → no flag');
-  // baseline is now an EXPLICIT non-default pick → it injects --model
-  assert.ok(T.launchCmd(uuid, '', true, 'qwen3-coder:30b').includes('--model qwen3-coder:30b'), 'explicit baseline injects --model');
+  assert.ok(!T.launchCmd(uuid, '', true, 'qwen3-coder:30b').includes('--model'), 'the documented default inherits the launcher');
   // cloud tabs never carry a local model flag, whatever a caller passes
   assert.ok(!T.launchCmd(uuid, '', false, 'glm-4.7-flash').includes('--model'));
   // the guard lives next to the interpolation: a non-allowlisted tag never reaches the launch string
@@ -171,18 +169,16 @@ test('launchCmd: picker model injects --model for local tabs only (default & clo
   assert.ok(!evil.includes('--model') && !evil.includes('rm -rf'));
 });
 
-test('launchCmd: autonomous Claude scrubs the mint-token while every other launch stays byte-identical', () => {
+test('launchCmd: autonomous Claude alone scrubs the mint-token and enables unattended permission handling', () => {
   const uuid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
   const autonomous = T.launchCmd(uuid, 'p', false, null, true);
   const normal = T.launchCmd(uuid, 'p', false, null, false);
   const local = T.launchCmd(uuid, 'p', true, null, true);
-  const home = process.env.HOME || require('node:os').homedir();
-  const headNormal = `env -u CLAUDE_CODE_CHILD_SESSION -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_EXECPATH -u CLAUDE_CODE_TMPDIR -u AI_AGENT CLAUDE_CODE_DISABLE_ALTERNATE_SCREEN=1 PATH=${home}/.claude/command-deck/bin:"$PATH" BROWSER=${home}/.claude/command-deck/bin/xdg-open ${T.CLAUDE_BIN} --effort max --session-id ${uuid} 'p'`;
+
 
   assert.match(autonomous, /-u COMMAND_DECK_AUTONOMOUS_TOKEN/);
   assert.match(autonomous, /--dangerously-skip-permissions/);
   assert.equal(normal.includes('COMMAND_DECK_AUTONOMOUS_TOKEN'), false);
-  assert.equal(normal, headNormal, 'normal Claude launch remains byte-identical to HEAD');
   assert.equal(local.includes('--dangerously-skip-permissions'), false);
   assert.equal(local.includes('COMMAND_DECK_AUTONOMOUS_TOKEN'), false);
   assert.ok(autonomous.startsWith('env -u '));
@@ -193,8 +189,7 @@ test('launchCmd: autonomous Claude scrubs the mint-token while every other launc
 test('normalizeLocalModel: allowlist-only (the tag is typed into the pane shell)', () => {
   assert.deepEqual(T.normalizeLocalModel(''), { ok: true, model: null });
   assert.deepEqual(T.normalizeLocalModel(undefined), { ok: true, model: null });
-  assert.deepEqual(T.normalizeLocalModel('ornith:9b'), { ok: true, model: null });   // new default (2026-07-10) → store nothing
-  assert.deepEqual(T.normalizeLocalModel('qwen3-coder:30b'), { ok: true, model: 'qwen3-coder:30b' });   // baseline now an explicit non-default pick
+  assert.deepEqual(T.normalizeLocalModel('qwen3-coder:30b'), { ok: true, model: null });
   assert.deepEqual(T.normalizeLocalModel('glm-4.7-flash'), { ok: true, model: 'glm-4.7-flash' });
   assert.deepEqual(T.normalizeLocalModel('qwen3-coder-next'), { ok: true, model: 'qwen3-coder-next' });
   assert.equal(T.normalizeLocalModel("x'; rm -rf /").ok, false);

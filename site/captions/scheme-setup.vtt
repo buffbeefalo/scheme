@@ -1,0 +1,595 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:00.768
+Welcome.
+
+00:00:01.048 --> 00:00:05.372
+In this walkthrough, we will set up Scheme
+on a working computer, open a real
+
+00:00:05.372 --> 00:00:08.685
+terminal in its browser, and connect from
+a second desktop.
+
+00:00:08.965 --> 00:00:13.461
+The footage comes from two separate Ubuntu
+desktop virtual machines, each with
+
+00:00:13.461 --> 00:00:14.960
+eight gigabytes of memory.
+
+00:00:15.240 --> 00:00:19.144
+They are actual computers with their own
+operating systems and disks.
+
+00:00:19.424 --> 00:00:22.475
+Everything shown uses a fresh
+demonstration account.
+
+00:00:22.755 --> 00:00:25.464
+You can pause whenever you need to copy a
+command.
+
+00:00:25.744 --> 00:00:29.873
+The written guides beside this video
+contain the commands and explain the
+
+00:00:29.873 --> 00:00:30.608
+alternatives.
+
+00:00:31.158 --> 00:00:33.526
+First, choose the computer that will do
+the work.
+
+00:00:33.806 --> 00:00:35.214
+Scheme calls it the host.
+
+00:00:35.494 --> 00:00:40.070
+This is where your project files, terminal
+sessions, and optional AI tools
+
+00:00:40.070 --> 00:00:40.379
+live.
+
+00:00:40.659 --> 00:00:44.073
+Keep it powered on and awake while you are
+working from another screen.
+
+00:00:44.353 --> 00:00:48.643
+The viewing device only needs a current
+browser and a private way to reach the
+
+00:00:48.643 --> 00:00:48.918
+host.
+
+00:00:49.198 --> 00:00:51.438
+It does not need its own Scheme
+installation.
+
+00:00:51.718 --> 00:00:55.238
+A monitor attached to the host is already
+on the same computer.
+
+00:00:55.518 --> 00:00:59.507
+A separate laptop or phone needs the
+connection we will set up later.
+
+00:01:00.057 --> 00:01:02.404
+Open the Terminal application on the host.
+
+00:01:02.684 --> 00:01:05.969
+On Ubuntu, the usual shortcut is Control,
+Alt, T.
+
+00:01:06.249 --> 00:01:10.251
+Use the first command in the host guide to
+update the package list, then
+
+00:01:10.251 --> 00:01:12.308
+install the small prerequisite tools.
+
+00:01:12.588 --> 00:01:16.986
+When sudo asks for your password, type
+your normal computer password and press
+
+00:01:16.986 --> 00:01:17.324
+Enter.
+
+00:01:17.604 --> 00:01:20.441
+It is normal for the characters to remain
+invisible.
+
+00:01:20.721 --> 00:01:24.156
+Tmux keeps the terminal sessions alive
+when a browser leaves.
+
+00:01:24.436 --> 00:01:27.252
+The script utility supplies the terminal
+connection.
+
+00:01:27.532 --> 00:01:29.687
+Git helps Scheme show project activity.
+
+00:01:29.967 --> 00:01:31.972
+Curl and unzip help with downloads.
+
+00:01:32.252 --> 00:01:34.492
+None of this requires a GitHub account.
+
+00:01:35.042 --> 00:01:36.514
+Now check the Node version.
+
+00:01:36.794 --> 00:01:38.991
+Scheme needs version twenty two or newer.
+
+00:01:39.271 --> 00:01:42.749
+If your computer already has that, you can
+skip the installation.
+
+00:01:43.029 --> 00:01:48.537
+Otherwise, the guide uses the official nvm
+installer, then loads nvm into this
+
+00:01:48.537 --> 00:01:51.221
+terminal and installs Node twenty two.
+
+00:01:51.501 --> 00:01:53.655
+Copy the commands in their displayed
+order.
+
+00:01:53.935 --> 00:01:55.727
+Wait for each download to finish.
+
+00:01:56.007 --> 00:01:58.269
+Check the version again before continuing.
+
+00:01:58.549 --> 00:02:02.538
+A new terminal may need to load nvm if its
+command is not found.
+
+00:02:02.818 --> 00:02:07.780
+Scheme itself has no package dependencies
+and no build step, so there is no
+
+00:02:07.780 --> 00:02:11.287
+separate npm install to run inside the
+Scheme folder.
+
+00:02:11.837 --> 00:02:14.995
+Open the public Scheme project page in the
+host browser.
+
+00:02:15.275 --> 00:02:18.283
+The green Code button has a Download ZIP
+option.
+
+00:02:18.563 --> 00:02:21.720
+You can also follow the direct ZIP link in
+the guide.
+
+00:02:22.000 --> 00:02:25.850
+Extract the archive, then keep the
+resulting Scheme folder somewhere
+
+00:02:25.850 --> 00:02:27.888
+permanent, such as your home folder.
+
+00:02:28.168 --> 00:02:30.344
+Do not run it inside the archive viewer.
+
+00:02:30.624 --> 00:02:34.805
+Open the extracted folder in your file
+manager and choose Open in Terminal.
+
+00:02:35.085 --> 00:02:39.387
+If that option is unavailable, open
+Terminal yourself and change into the
+
+00:02:39.387 --> 00:02:39.800
+folder.
+
+00:02:40.080 --> 00:02:43.664
+Check that you can see the readme, the
+server file, and the bin folder.
+
+00:02:43.944 --> 00:02:46.035
+Those tell you that you are in the right
+place.
+
+00:02:46.585 --> 00:02:50.848
+Run the command that makes the launcher
+files executable, then run Scheme
+
+00:02:50.848 --> 00:02:51.257
+Doctor.
+
+00:02:51.537 --> 00:02:54.353
+This check explains what is ready and what
+is missing.
+
+00:02:54.633 --> 00:02:57.705
+Fix any missing required tools before you
+continue.
+
+00:02:57.985 --> 00:03:02.230
+Claude Code, Codex, Ollama, and Tailscale
+are optional at this point.
+
+00:03:02.510 --> 00:03:05.027
+You can make a normal Shell terminal
+without them.
+
+00:03:05.307 --> 00:03:07.227
+Also check the character encoding.
+
+00:03:07.507 --> 00:03:09.065
+It should say UTF eight.
+
+00:03:09.345 --> 00:03:11.798
+The guide gives an Ubuntu fix if it does
+not.
+
+00:03:12.078 --> 00:03:16.062
+If the doctor command says it cannot find
+a file, check your current folder
+
+00:03:16.062 --> 00:03:17.603
+before reinstalling anything.
+
+00:03:17.883 --> 00:03:21.211
+A successful doctor check is a useful
+first milestone.
+
+00:03:21.761 --> 00:03:24.919
+Start Scheme from its folder and keep that
+terminal open.
+
+00:03:25.199 --> 00:03:29.690
+On the same working computer, open
+localhost on port three thousand in your
+
+00:03:29.690 --> 00:03:30.169
+browser.
+
+00:03:30.449 --> 00:03:32.156
+You should see Terminal and Connect.
+
+00:03:32.436 --> 00:03:37.102
+There is one detail for smaller computers:
+the default memory reserve is eight
+
+00:03:37.102 --> 00:03:38.239
+thousand mebibytes.
+
+00:03:38.519 --> 00:03:42.670
+An eight gigabyte machine may have less
+free memory than that, and Scheme will
+
+00:03:42.670 --> 00:03:43.788
+refuse a new session.
+
+00:03:44.068 --> 00:03:48.612
+In this test, we use the documented
+reserve of one thousand and twenty four.
+
+00:03:48.892 --> 00:03:51.217
+Set it in the terminal before starting
+Scheme.
+
+00:03:51.497 --> 00:03:55.959
+This is a reserve check, not a memory
+limit, and it does not make a large
+
+00:03:55.959 --> 00:03:56.937
+local model fit.
+
+00:03:57.487 --> 00:04:01.263
+Press New, choose Shell, and give the
+session a name you will recognize.
+
+00:04:01.543 --> 00:04:03.911
+For the first test, your home folder is
+fine.
+
+00:04:04.191 --> 00:04:06.282
+Start the session and wait for the prompt.
+
+00:04:06.562 --> 00:04:10.039
+Type the harmless hello command from the
+guide and press Enter.
+
+00:04:10.319 --> 00:04:14.398
+Seeing Scheme is ready confirms that
+typing in this browser reaches the
+
+00:04:14.398 --> 00:04:15.375
+working computer.
+
+00:04:15.655 --> 00:04:20.034
+You can open another tab for a different
+task, rename a tab, or choose a
+
+00:04:20.034 --> 00:04:20.946
+project folder.
+
+00:04:21.226 --> 00:04:25.774
+Scheme can discover folders in common
+places such as your projects or code
+
+00:04:25.774 --> 00:04:26.389
+directory.
+
+00:04:26.669 --> 00:04:29.591
+Only choose folders you intend the tool to
+work with.
+
+00:04:29.871 --> 00:04:32.965
+The browser terminal has the access of
+your host account.
+
+00:04:33.515 --> 00:04:35.221
+Now move to the second computer.
+
+00:04:35.501 --> 00:04:39.576
+We are using a private SSH tunnel for this
+actual desktop test.
+
+00:04:39.856 --> 00:04:43.845
+Your host must already accept SSH
+connections from this device.
+
+00:04:44.125 --> 00:04:48.032
+The Connect panel supplies a command for
+your host, and the remote guide
+
+00:04:48.032 --> 00:04:49.117
+explains the pieces.
+
+00:04:49.397 --> 00:04:52.405
+Replace example names with your own host
+and user.
+
+00:04:52.685 --> 00:04:57.210
+Run the tunnel command on the viewing
+computer, keep that terminal open, and
+
+00:04:57.210 --> 00:05:00.365
+open localhost on port three thousand in
+its browser.
+
+00:05:00.645 --> 00:05:03.397
+Localhost now reaches the host through the
+tunnel.
+
+00:05:03.677 --> 00:05:07.779
+If that port is already busy, choose a
+different local port as the guide
+
+00:05:07.779 --> 00:05:08.349
+describes.
+
+00:05:08.629 --> 00:05:12.939
+We can see and type into the same host
+session from this second desktop.
+
+00:05:13.489 --> 00:05:17.805
+For a phone, the guides recommend
+Tailscale on both the host and the viewing
+
+00:05:17.805 --> 00:05:18.203
+device.
+
+00:05:18.483 --> 00:05:23.049
+Sign into your own account, then use
+Tailscale Serve to give the local
+
+00:05:23.049 --> 00:05:25.267
+dashboard a private HTTPS address.
+
+00:05:25.547 --> 00:05:27.531
+Open that exact address on the phone.
+
+00:05:27.811 --> 00:05:32.574
+This part involves your account: our clean
+desktop test does not claim to have
+
+00:05:32.574 --> 00:05:36.238
+completed your Tailscale sign in or tested
+a physical phone.
+
+00:05:36.518 --> 00:05:39.910
+The smaller-screen preview shows the
+layout and touch controls.
+
+00:05:40.190 --> 00:05:44.712
+Use the touch key bar for keys such as
+Escape and Control, and open Tools for
+
+00:05:44.712 --> 00:05:46.121
+the additional controls.
+
+00:05:46.401 --> 00:05:50.776
+Anyone who can access the dashboard can
+use the host as your account, so keep
+
+00:05:50.776 --> 00:05:52.139
+that connection private.
+
+00:05:52.689 --> 00:05:54.161
+AI tools are optional.
+
+00:05:54.441 --> 00:05:58.965
+Install the tool you want on the host,
+then start it once in a normal terminal
+
+00:05:58.965 --> 00:06:00.415
+and finish its own setup.
+
+00:06:00.695 --> 00:06:04.108
+Claude Code and Codex use your own access,
+account, and billing.
+
+00:06:04.388 --> 00:06:08.433
+We checked their installation in this
+clean environment; we did not sign into
+
+00:06:08.433 --> 00:06:09.273
+a cloud account.
+
+00:06:09.553 --> 00:06:13.713
+The local model option uses Claude Code
+with Ollama on your machine.
+
+00:06:13.993 --> 00:06:18.318
+Choose a model that actually fits your
+memory, download it, and configure the
+
+00:06:18.318 --> 00:06:20.564
+local model name before starting Scheme.
+
+00:06:20.844 --> 00:06:25.250
+A small model can prove the connection,
+but it does not promise the quality of
+
+00:06:25.250 --> 00:06:26.775
+a much larger coding model.
+
+00:06:27.055 --> 00:06:31.491
+The local launcher checks that the server
+and model are available and refuses
+
+00:06:31.491 --> 00:06:33.796
+to quietly fall back to a cloud service.
+
+00:06:34.346 --> 00:06:38.060
+Once the first terminal works, you can
+install the optional background
+
+00:06:38.060 --> 00:06:38.485
+service.
+
+00:06:38.765 --> 00:06:43.025
+Keep any settings you need, including the
+smaller memory reserve, exported in
+
+00:06:43.025 --> 00:06:45.293
+the terminal where you run the installer.
+
+00:06:45.573 --> 00:06:49.373
+Stop the foreground server, then run the
+service installer from the Scheme
+
+00:06:49.373 --> 00:06:49.733
+folder.
+
+00:06:50.013 --> 00:06:53.405
+On Linux, the installer explains how the
+user service starts.
+
+00:06:53.685 --> 00:06:57.333
+Follow its instructions if you want it to
+start before you log in.
+
+00:06:57.613 --> 00:07:01.967
+We tested this by rebooting the host
+desktop and checking that Scheme started
+
+00:07:01.967 --> 00:07:02.306
+again.
+
+00:07:02.586 --> 00:07:04.975
+The service keeps the web dashboard
+available.
+
+00:07:05.255 --> 00:07:08.967
+It does not preserve a running command
+through a power loss or a reboot.
+
+00:07:09.517 --> 00:07:11.693
+Here are three different recovery cases.
+
+00:07:11.973 --> 00:07:14.725
+Closing the browser leaves the host
+terminal running.
+
+00:07:15.005 --> 00:07:19.329
+In our test, a job completed while the
+viewing browser was fully closed, and
+
+00:07:19.329 --> 00:07:21.491
+its output was there when we returned.
+
+00:07:21.771 --> 00:07:26.729
+Restarting the Scheme web service also
+kept that same terminal process and its
+
+00:07:26.729 --> 00:07:28.064
+unfinished job alive.
+
+00:07:28.344 --> 00:07:30.072
+Rebooting the host is different.
+
+00:07:30.352 --> 00:07:34.500
+The service returned, and saved tabs could
+reopen, but the old running
+
+00:07:34.500 --> 00:07:35.685
+processes were gone.
+
+00:07:35.965 --> 00:07:40.297
+If the connection stops working, first
+check that the host is awake, Scheme is
+
+00:07:40.297 --> 00:07:43.240
+running, and your private connection is
+still active.
+
+00:07:43.520 --> 00:07:46.208
+The troubleshooting guide follows that
+same order.
+
+00:07:46.758 --> 00:07:48.699
+Before you finish, check four things.
+
+00:07:48.979 --> 00:07:51.177
+The doctor passes its required checks.
+
+00:07:51.457 --> 00:07:53.739
+A Shell command works in the host browser.
+
+00:07:54.019 --> 00:07:57.966
+Your viewing device reaches that same
+session through a private connection.
+
+00:07:58.246 --> 00:08:02.266
+And you understand which tools or account
+connections you still need to set
+
+00:08:02.266 --> 00:08:02.427
+up.
+
+00:08:02.707 --> 00:08:06.771
+The public guides cover configuration,
+phones, remote desktops, and
+
+00:08:06.771 --> 00:08:07.742
+troubleshooting.
+
+00:08:08.022 --> 00:08:11.542
+Linux on these two Ubuntu ARM desktops was
+tested.
+
+00:08:11.822 --> 00:08:16.266
+The written Mac and Windows through WSL
+host paths still need separate
+
+00:08:16.266 --> 00:08:17.091
+verification.
+
+00:08:17.371 --> 00:08:20.678
+Start with one useful terminal, then add
+the tools you need.
+
+00:08:20.958 --> 00:08:23.625
+Scheme is ready to become the screen you
+return to.

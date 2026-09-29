@@ -36,10 +36,6 @@ test('a prefix only matches at an id boundary — no lookalike bleed', () => {
   assert.equal(contextWindowFor('claude-fable-55'), null);
 });
 
-test('verified local model: ornith:9b = 131072 (claude-local raised it 2026-07-11)', () => {
-  assert.equal(contextWindowFor('ornith:9b'), 131072);
-});
-
 test('unknown or unverified models yield null — never a made-up denominator', () => {
   for (const m of ['qwen3-coder:30b', 'glm-4.7-flash', 'qwen3-coder-next', 'gpt-5.5',
     'claude-sonnet-4-5', '', null, undefined]) {

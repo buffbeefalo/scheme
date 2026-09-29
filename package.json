@@ -1,6 +1,6 @@
 {
   "name": "scheme",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Self-hosted cockpit: drive Claude Code, Codex or a local LLM running on one machine from a browser on another.",
   "license": "MIT",
   "private": true,
@@ -11,6 +11,7 @@
     "start": "bin/scheme",
     "doctor": "bin/scheme-doctor",
     "check:release": "node scripts/check-release.js",
+    "check:media": "node scripts/check-media.js",
     "test": "node --test test/*.test.js"
   }
 }

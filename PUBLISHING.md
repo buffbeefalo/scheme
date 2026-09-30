@@ -115,7 +115,7 @@ Check desktop and narrow screens, keyboard focus, reduced motion, both player er
 
 ## Release and GitHub Pages
 
-The Pages workflow follows [GitHub's custom-workflow deployment model](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages). Set the repository's **Settings → Pages → Source** to **GitHub Actions**. The workflow is pinned to v1.1.0: both manual dispatch and the matching published-release event check out that tag. Publishing another tag does not deploy this version by accident.
+The Pages workflow follows [GitHub's custom-workflow deployment model](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages). Set the repository's **Settings → Pages → Source** to **GitHub Actions**. The workflow checks out the exact commit that triggered the run; its film downloads remain pinned to the reviewed v1.1.0 release. To publish a page correction, commit it to main and manually run the public-site workflow from main. This also works with the GitHub Pages environment's main-only deployment rule. The matching published-release event can deploy where environment rules permit that tag; publishing another tag does not deploy this version by accident.
 
 Complete the source and media review before creating the release tag, so the tag already contains the final media hashes and transcripts. Create the release as a draft, upload the two reviewed MP4 attachments with the exact names above, then publish it. This avoids starting the Pages job before the attachments exist. Do not replace reviewed release attachments in place; different bytes must receive a new reviewed release and matching contract.
 

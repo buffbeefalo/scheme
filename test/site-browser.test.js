@@ -122,6 +122,7 @@ test('public site motion and film controls in a browser', {
     await page.locator('#product-film').evaluate(video => { video.currentTime = 3; });
     await page.locator('[data-player="product-film"][data-time="0"]').click();
     await page.waitForFunction(() => document.getElementById('product-film').currentTime < 2);
+    await page.waitForFunction(() => document.querySelector('[data-player="product-film"][data-time="0"]').getAttribute('aria-current') === 'true');
     assert.equal(await page.locator('[data-player="product-film"][data-time="0"]').getAttribute('aria-current'), 'true');
     await page.locator('#product-film').evaluate(video => video.pause());
     await page.locator('#sessions-preview').scrollIntoViewIfNeeded();

@@ -74,8 +74,12 @@ function buildSite({ root = path.join(__dirname, '..'), mediaDir, out } = {}) {
     tokens[`${film.id}Transcript`] = html;
     tokens[`${film.id}Duration`] = timeLabel(film.durationSeconds);
     tokens[`${film.id}Chapters`] = film.chapters.map((chapter) => `<a href="media/scheme-${film.id}.mp4#t=${chapter.time}" data-player="${film.id}-film" data-time="${chapter.time}"><time>${timeLabel(chapter.time)}</time><span>${escapeHTML(chapter.title)}</span></a>`).join('\n');
-    const title = film.id === 'product' ? 'Scheme product film' : 'Scheme setup walkthrough';
-    content.set(`transcripts/${film.id}-transcript.html`, `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title} — transcript</title><link rel="icon" href="../icon.svg" type="image/svg+xml"><link rel="stylesheet" href="../styles.css"></head><body><main class="transcript-page"><a class="back-link" href="../#${film.id === 'product' ? 'watch' : 'setup'}">Back to the film</a><h1>${title}</h1><p>Complete transcript · ${timeLabel(film.durationSeconds)} · <a href="${film.id}-transcript.md" download>Download text</a></p><article class="transcript-text">${html}</article></main></body></html>\n`);
+    const { title, section } = {
+      product: { title: 'Scheme product film', section: 'intro' },
+      setup: { title: 'Scheme setup walkthrough', section: 'setup' },
+      capabilities: { title: 'Scheme capabilities film', section: 'watch' },
+    }[film.id];
+    content.set(`transcripts/${film.id}-transcript.html`, `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${title} — transcript</title><link rel="icon" href="../icon.svg" type="image/svg+xml"><link rel="stylesheet" href="../styles.css"></head><body><main class="transcript-page"><a class="back-link" href="../#${section}">Back to the film</a><h1>${title}</h1><p>Complete transcript · ${timeLabel(film.durationSeconds)} · <a href="${film.id}-transcript.md" download>Download text</a></p><article class="transcript-text">${html}</article></main></body></html>\n`);
   }
   const template = readText(regular(path.join(site, 'index.html')));
   const used = new Set();

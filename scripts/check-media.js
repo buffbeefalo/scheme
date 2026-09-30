@@ -10,10 +10,13 @@ const { createHash } = require('node:crypto');
 const ASSETS = Object.freeze([
   { path: 'media/scheme-product.mp4', source: 'release' },
   { path: 'media/scheme-setup.mp4', source: 'release' },
+  { path: 'media/scheme-capabilities.mp4', source: 'release' },
   { path: 'captions/scheme-product.vtt', source: 'repository' },
   { path: 'captions/scheme-setup.vtt', source: 'repository' },
+  { path: 'captions/scheme-capabilities.vtt', source: 'repository' },
   { path: 'transcripts/product-transcript.md', source: 'repository' },
   { path: 'transcripts/setup-transcript.md', source: 'repository' },
+  { path: 'transcripts/capabilities-transcript.md', source: 'repository' },
 ]);
 const MIB = 1024 * 1024;
 const ROOT_FIELDS = ['schemaVersion', 'repository', 'releaseTag', 'reviewed', 'assets', 'films'];
@@ -117,10 +120,10 @@ function checkMedia({ root = path.join(__dirname, '..'), mediaDir } = {}) {
   }
   for (const asset of ASSETS) if (!assets.has(asset.path)) report(asset.path, 'missing asset in manifest');
   const films = new Map();
-  if (!Array.isArray(manifest.films) || manifest.films.length !== 2) report('media manifest', 'exactly two films are required');
+  if (!Array.isArray(manifest.films) || manifest.films.length !== 3) report('media manifest', 'exactly three films are required');
   for (const film of Array.isArray(manifest.films) ? manifest.films : []) {
     if (!exactFields(film, ['id', 'durationSeconds', 'width', 'height', 'chapters'])
-      || !['product', 'setup'].includes(film.id) || films.has(film.id)) {
+      || !['product', 'setup', 'capabilities'].includes(film.id) || films.has(film.id)) {
       report('media manifest', 'unexpected or duplicate film');
       continue;
     }
@@ -138,13 +141,13 @@ function checkMedia({ root = path.join(__dirname, '..'), mediaDir } = {}) {
       previous = chapter?.time;
     }
   }
-  for (const id of ['product', 'setup']) if (!films.has(id)) report(id, 'film metadata is missing');
+  for (const id of ['product', 'setup', 'capabilities']) if (!films.has(id)) report(id, 'film metadata is missing');
 
-  directories.set('captions', directory(path.join(site, 'captions'), 'captions', new Set(['scheme-product.vtt', 'scheme-setup.vtt'])));
-  directories.set('transcripts', directory(path.join(site, 'transcripts'), 'transcripts', new Set(['product-transcript.md', 'setup-transcript.md'])));
+  directories.set('captions', directory(path.join(site, 'captions'), 'captions', new Set(['scheme-product.vtt', 'scheme-setup.vtt', 'scheme-capabilities.vtt'])));
+  directories.set('transcripts', directory(path.join(site, 'transcripts'), 'transcripts', new Set(['product-transcript.md', 'setup-transcript.md', 'capabilities-transcript.md'])));
   directories.set('media', typeof mediaDir === 'string' && mediaDir.length > 0
-    ? directory(path.resolve(mediaDir), 'release media', new Set(['scheme-product.mp4', 'scheme-setup.mp4'])) : false);
-  if (!mediaDir) report('release media', 'provide --media-dir with the two reviewed MP4 files');
+    ? directory(path.resolve(mediaDir), 'release media', new Set(['scheme-product.mp4', 'scheme-setup.mp4', 'scheme-capabilities.mp4'])) : false);
+  if (!mediaDir) report('release media', 'provide --media-dir with the three reviewed MP4 files');
   for (const contract of ASSETS) {
     const asset = assets.get(contract.path);
     if (!asset || !directories.get(contract.path.split('/')[0])) continue;
@@ -164,7 +167,7 @@ function checkMedia({ root = path.join(__dirname, '..'), mediaDir } = {}) {
       } else {
         const text = readText(file);
         if (contract.path.endsWith('.vtt')) {
-          const id = contract.path.includes('product') ? 'product' : 'setup';
+          const id = path.basename(contract.path, '.vtt').slice('scheme-'.length);
           const error = checkCaptions(text, films.get(id)?.durationSeconds || 0);
           if (error) report(contract.path, error);
         } else if (!/^# .+/m.test(text) || text.trim().length < 30 || text.includes('\u0000')) report(contract.path, 'readable transcript with a title is required');
@@ -193,7 +196,7 @@ if (require.main === module) {
     if (result.issues.length) {
       console.error(`Media check failed:\n${result.issues.map((issue) => `  ${issue}`).join('\n')}`);
       process.exitCode = 1;
-    } else console.log('Media check passed: six reviewed assets for v1.1.0.');
+    } else console.log('Media check passed: nine reviewed assets for v1.1.0.');
   } catch {
     console.error('Media check failed. Usage: node scripts/check-media.js --media-dir /path/to/reviewed-media');
     process.exitCode = 1;

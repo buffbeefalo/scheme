@@ -33,7 +33,7 @@
         <h1 id="hero-title">Your working computer.<br>Any screen.</h1>
         <p class="hero-description">Your projects, terminals, and coding tools stay on a computer you control. Scheme gives you a place to use them from a browser, wherever your private connection reaches.</p>
         <div class="actions">
-          <a class="button" href="#watch"><span class="play-icon" aria-hidden="true">▶</span>Watch the tour</a>
+          <a class="button" href="#watch"><span class="play-icon" aria-hidden="true">▶</span>See what Scheme can do</a>
           <a class="text-button" href="#setup">Get Scheme running</a>
         </div>
         <p class="hero-footnote">Start with a plain Shell. Add Claude Code, Codex, or a local model when you’re ready.</p>
@@ -61,11 +61,31 @@
       <p><strong>Your connection</strong><span>Reach it privately with SSH or Tailscale.</span></p>
     </div>
 
-    <section id="watch" class="film-section section-space" aria-labelledby="product-heading">
+    <section id="watch" class="film-section section-space" aria-labelledby="capabilities-heading">
       <div class="wrap">
         <div class="section-heading">
-          <div><p class="section-context">Meet Scheme</p><h2 id="product-heading">Pick up where<br>you left off.</h2></div>
-          <p>Open a terminal. Change screens. Come back to your work. See what the dashboard does and where the work actually runs.</p>
+          <div><p class="section-context">The capabilities film</p><h2 id="capabilities-heading">The work stays<br>on your computer.</h2></div>
+          <p>Follow a project across screens. See sessions, search, tool choices, image attachments, private access, and phone controls in action.</p>
+        </div>
+        <div class="video-shell">
+          <video id="capabilities-film" controls playsinline preload="none" poster="assets/scheme-desktop-demo.png" aria-label="Scheme capabilities marketing film" aria-describedby="capabilities-description" tabindex="0">
+            <source src="media/scheme-capabilities.mp4" type="video/mp4">
+            <track kind="captions" src="captions/scheme-capabilities.vtt" srclang="en" label="English" default>
+            Your browser cannot play this film. <a href="media/scheme-capabilities.mp4">Download the capabilities film</a> or <a href="transcripts/capabilities-transcript.html">read the transcript</a>.
+          </video>
+          <p class="video-error" data-error-for="capabilities-film" role="status" hidden>The film could not load. <a href="media/scheme-capabilities.mp4">Open the video file</a> or <a href="transcripts/capabilities-transcript.html">read the transcript</a>.</p>
+        </div>
+        <div class="film-meta"><p id="capabilities-description">{{capabilitiesDuration}} · Capabilities pitch · English captions</p><a href="media/scheme-capabilities.mp4" download>Download film</a></div>
+        <nav class="chapters" aria-label="Capabilities film chapters">{{capabilitiesChapters}}</nav>
+        <details class="transcript"><summary>Read the capabilities film transcript</summary><div class="transcript-text">{{capabilitiesTranscript}}<p><a href="transcripts/capabilities-transcript.html">Open readable transcript</a> <span aria-hidden="true">/</span> <a href="transcripts/capabilities-transcript.md" download>Download text</a> <span aria-hidden="true">/</span> <a href="captions/scheme-capabilities.vtt" download>Download captions</a></p></div></details>
+      </div>
+    </section>
+
+    <section id="intro" class="film-section section-space" aria-labelledby="product-heading">
+      <div class="wrap">
+        <div class="section-heading">
+          <div><p class="section-context">The short introduction</p><h2 id="product-heading">Pick up where<br>you left off.</h2></div>
+          <p>Short on time? The original introduction gives you the idea in 88 seconds. The full setup walkthrough follows below.</p>
         </div>
         <div class="video-shell">
           <video id="product-film" controls playsinline preload="none" poster="assets/scheme-desktop-demo.png" aria-label="Scheme product tour" aria-describedby="product-description" tabindex="0">

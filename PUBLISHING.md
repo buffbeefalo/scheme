@@ -73,7 +73,7 @@ The default suite skips the unavailable `0.144.6 fixture` transcript case by nam
 
 The [capability guide](CAPABILITIES.md#validation-for-v110) records actual Ubuntu ARM64 desktop coverage. macOS and WSL host behavior remain unverified. Resume regression tests do not establish live provider recovery compatibility. A clean scan or passing helper test does not remove those limits.
 
-## Review the two films
+## Review the three films
 
 The v1.1.0 presentation requires exactly these assets:
 
@@ -81,14 +81,15 @@ The v1.1.0 presentation requires exactly these assets:
 |---|---|---|
 | Product film | Reviewed external render directory: `scheme-product.mp4` | Release attachment and same-origin `media/scheme-product.mp4` |
 | Setup film | Reviewed external render directory: `scheme-setup.mp4` | Release attachment and same-origin `media/scheme-setup.mp4` |
-| English captions | `site/captions/scheme-product.vtt` and `scheme-setup.vtt` | Same-origin `captions/` |
-| Written transcripts | `site/transcripts/product-transcript.md` and `setup-transcript.md` | Inline readable text, standalone HTML pages, and downloadable text |
+| Capabilities film | Reviewed external render directory: `scheme-capabilities.mp4` | Release attachment and same-origin `media/scheme-capabilities.mp4` |
+| English captions | `site/captions/scheme-product.vtt`, `scheme-setup.vtt`, and `scheme-capabilities.vtt` | Same-origin `captions/` |
+| Written transcripts | `site/transcripts/product-transcript.md`, `setup-transcript.md`, and `capabilities-transcript.md` | Inline readable text, standalone HTML pages, and downloadable text |
 
 **Keep MP4s outside Git and outside the source tree.** Caption and transcript text belongs in source control. Use clean demonstration machines and fictional projects. Actual setup footage should show what was exercised; optional account setup must remain visibly unverified if it was not completed. Never film a personal working dashboard or publish raw test machines, accounts, logs, or recordings that have not been reviewed.
 
 Review every final film's picture, narration, captions, and transcript for private content and accurate claims. Inspect the file metadata and confirm the intended video and audio streams with `ffprobe`. Use broadly playable H.264 video, AAC audio, a regular MP4 container, and fast-start metadata. Review representative playback, full narration, end-to-end timing, caption readability, and every visible command; sample images or a text scan alone are not enough. Inspect still images and their metadata too, then update their existing reviewed image hashes only after that review.
 
-`site/media-manifest.json` records the fixed release, six explicit assets, exact byte sizes and SHA-256 values, final duration/dimensions, and chapter starts. Its initial `reviewed: false`, empty hashes, and zero sizes are intentional publication blockers. Fill the record from the final reviewed files and set `reviewed: true` only when that review is complete. The hashes detect changes after review; they cannot establish that the review happened.
+`site/media-manifest.json` records the fixed release, nine explicit assets, exact byte sizes and SHA-256 values, final duration/dimensions, and chapter starts. Its initial `reviewed: false`, empty hashes, and zero sizes are intentional publication blockers. Fill the record from the final reviewed files and set `reviewed: true` only when that review is complete. The hashes detect changes after review; they cannot establish that the review happened.
 
 The media checker rejects unknown or missing assets, unexpected files in the media/caption/transcript directories, symlinks, unpinned release metadata, missing review facts, changed hashes or sizes, non-MP4 video headers, invalid WebVTT, and chapters or captions outside the reviewed duration. It streams hashes so large films need not be loaded into memory. It also caps the combined media at 900 MiB. Codec and visual checks remain a separate review step.
 
@@ -109,19 +110,21 @@ node scripts/build-site.js --media-dir /path/to/reviewed-media --out "$scheme_si
 python3 -m http.server 8080 --bind 127.0.0.1 --directory "$scheme_site_dir"
 ```
 
-Open <http://localhost:8080>. The build creates the two readable transcript pages and chapter links from reviewed text and timing. The video, captions, and poster files use relative URLs from the same origin, including when hosted at `/scheme/`. A visitor can use native player controls, captions, the chapter links, and transcript text. JavaScript adds seeking within the page and pauses the other film; it does not connect to Scheme or request account access. If JavaScript is unavailable, chapter links open the corresponding video time directly.
+Open <http://localhost:8080>. The build creates three readable transcript pages and chapter links from reviewed text and timing. The video, captions, and poster files use relative URLs from the same origin, including when hosted at `/scheme/`. A visitor can use native player controls, captions, the chapter links, and transcript text. JavaScript adds seeking within the page and pauses the other films; it does not connect to Scheme or request account access. If JavaScript is unavailable, chapter links open the corresponding video time directly.
 
-Check desktop and narrow screens, keyboard focus, reduced motion, both player error states, caption display, transcript expansion, standalone transcripts, and downloads. Use an HTTP preview: opening the page directly from disk is not the intended caption test. Python's basic server is useful for that page review but does not supply HTTP byte ranges; use a byte-range-capable server or the deployed Pages site for reliable video seeking checks. The browser must also support the reviewed H.264/AAC encoding. Confirm there are no requests to a Scheme API, no sign-in requirement, and no private data in the staged directory. Do not put the build output back into the Git checkout.
+Check desktop and narrow screens, keyboard focus, reduced motion, all player error states, caption display, transcript expansion, standalone transcripts, and downloads. Use an HTTP preview: opening the page directly from disk is not the intended caption test. Python's basic server is useful for that page review but does not supply HTTP byte ranges; use a byte-range-capable server or the deployed Pages site for reliable video seeking checks. The browser must also support the reviewed H.264/AAC encoding. Confirm there are no requests to a Scheme API, no sign-in requirement, and no private data in the staged directory. Do not put the build output back into the Git checkout.
 
 ## Release and GitHub Pages
 
 The Pages workflow follows [GitHub's custom-workflow deployment model](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages). Set the repository's **Settings → Pages → Source** to **GitHub Actions**. The workflow checks out the exact commit that triggered the run; its film downloads remain pinned to the reviewed v1.1.0 release. To publish a page correction, commit it to main and manually run the public-site workflow from main. This also works with the GitHub Pages environment's main-only deployment rule. The matching published-release event can deploy where environment rules permit that tag; publishing another tag does not deploy this version by accident.
 
-Complete the source and media review before creating the release tag, so the tag already contains the final media hashes and transcripts. Create the release as a draft, upload the two reviewed MP4 attachments with the exact names above, then publish it. This avoids starting the Pages job before the attachments exist. Do not replace reviewed release attachments in place; different bytes must receive a new reviewed release and matching contract.
+For a new software release, complete the source and media review before creating its tag. Create the release as a draft, upload its reviewed MP4 attachments, then publish it. This avoids starting the Pages job before the attachments exist. Never replace a reviewed attachment in place.
 
-The build job downloads only those two explicit assets from the v1.1.0 release, verifies their SHA-256 values and the source-controlled caption/transcript bytes, and stages the static page. The upload action receives only that explicit staging directory. The deployment job alone receives `pages: write` and `id-token: write`; the source build has read permissions. All actions are pinned to commit hashes. No terminal server runs on Pages.
+The capabilities film is an additional, distinctly named attachment to v1.1.0. Its demonstrations use the same runtime as that tag; the presentation updates do not change the runtime. The original tag and all six original reviewed video, caption, and transcript assets remain unchanged. The new film's review record and text assets live on main, which supplies the current Pages presentation. Upload only the new attachment, without an overwrite option, before manually publishing the updated presentation from main. Future changes to published video bytes require a new filename or reviewed release and matching explicit contract; adding a film never authorizes replacing an existing one.
 
-After deployment, verify the public page anonymously. Play both films, seek chapters, display captions, read both transcripts, follow source/setup links, and confirm the release downloads. Also install the published source ZIP in a fresh location and repeat the doctor and Shell test. A successful local build does not establish public availability.
+The build job downloads only those three explicit assets from the v1.1.0 release, verifies their SHA-256 values and the source-controlled caption/transcript bytes, and stages the static page. The upload action receives only that explicit staging directory. The deployment job alone receives `pages: write` and `id-token: write`; the source build has read permissions. All actions are pinned to commit hashes. No terminal server runs on Pages.
+
+After deployment, verify the public page anonymously. Play all three films, seek chapters, display captions, read the transcripts, follow source/setup links, and confirm the release downloads. For a changed runtime, also install the published source ZIP in a fresh location and repeat the doctor and Shell test. A successful local build does not establish public availability.
 
 ## Before changing visibility or uploading a release
 

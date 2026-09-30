@@ -18,7 +18,7 @@ function fixture(t) {
   fs.mkdirSync(path.join(site, 'captions'), { recursive: true });
   fs.mkdirSync(path.join(site, 'transcripts'));
   const manifest = { schemaVersion: 1, repository: 'buffbeefalo/scheme', releaseTag: 'v1.1.0', reviewed: true, assets: [], films: [] };
-  for (const id of ['product', 'setup']) {
+  for (const id of ['product', 'setup', 'capabilities']) {
     const video = Buffer.concat([Buffer.from([0, 0, 0, 24]), Buffer.from('ftypisom'), Buffer.alloc(32)]);
     const captions = Buffer.from('WEBVTT\n\n00:00:00.000 --> 00:00:02.000\nExample narration.\n');
     const transcript = Buffer.from(`# Scheme ${id} film\n\n## 00:00 Getting started\n\nExample narration.\n`);
@@ -115,6 +115,27 @@ test('chapters must begin at zero and remain ordered inside the reviewed duratio
   assert.match(f.check().issues.join('\n'), /chapters/);
 });
 
+test('capabilities captions use their own film duration instead of the setup duration', (t) => {
+  const f = fixture(t);
+  f.manifest.films.find((film) => film.id === 'capabilities').durationSeconds = 35;
+  const asset = f.manifest.assets.find((item) => item.path === 'captions/scheme-capabilities.vtt');
+  const content = Buffer.from('WEBVTT\n\n00:00:34.000 --> 00:00:36.000\nPast this film, inside the setup film.\n');
+  fs.writeFileSync(path.join(f.site, asset.path), content);
+  asset.sha256 = createHash('sha256').update(content).digest('hex');
+  asset.bytes = content.length;
+  f.write();
+  assert.match(f.check().issues.join('\n'), /scheme-capabilities.vtt: caption timing/);
+});
+
+test('the new film cannot disappear from the reviewed set or change after review', (t) => {
+  const f = fixture(t);
+  fs.appendFileSync(path.join(f.mediaDir, 'scheme-capabilities.mp4'), 'changed');
+  assert.match(f.check().issues.join('\n'), /scheme-capabilities.mp4: SHA-256 differs/);
+  f.manifest.assets = f.manifest.assets.filter((asset) => asset.path !== 'media/scheme-capabilities.mp4');
+  f.write();
+  assert.match(f.check().issues.join('\n'), /scheme-capabilities.mp4: missing asset/);
+});
+
 test('an unpinned repository, tag, or undeclared field cannot change the download source', (t) => {
   const f = fixture(t);
   f.manifest.repository = 'example/other';
@@ -144,14 +165,19 @@ test('the static build includes readable transcripts and excludes runtime or ext
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'scheme-site-'));
   t.after(() => fs.rmSync(out, { recursive: true, force: true }));
   const result = buildSite({ root: f.root, mediaDir: f.mediaDir, out });
-  assert.equal(result.files, 17);
+  assert.equal(result.files, 21);
   assert.equal(fs.existsSync(path.join(out, 'server.js')), false);
   assert.equal(fs.existsSync(path.join(out, 'unlisted.txt')), false);
   const html = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
   assert.doesNotMatch(html, /\{\{/);
   assert.match(html, /src="captions\/scheme-product.vtt"/);
+  assert.match(html, /src="captions\/scheme-capabilities.vtt"/);
+  assert.match(html, /data-player="capabilities-film" data-time="30"/);
   assert.match(html, /data-player="setup-film" data-time="30"/);
   assert.match(fs.readFileSync(path.join(out, 'transcripts', 'setup-transcript.html'), 'utf8'), /<p>Example narration\.<\/p>/);
+  const capabilities = fs.readFileSync(path.join(out, 'transcripts', 'capabilities-transcript.html'), 'utf8');
+  assert.match(capabilities, /Scheme capabilities film/);
+  assert.match(capabilities, /href="\.\.\/#watch"/);
   assert.throws(() => buildSite({ root: f.root, mediaDir: f.mediaDir, out }), /must be empty/);
 });
 

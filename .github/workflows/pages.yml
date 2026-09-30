@@ -33,7 +33,7 @@ jobs:
         run: node scripts/check-release.js
       - name: Test media validation
         run: node --test test/media.test.js
-      - name: Download the two explicit release films
+      - name: Download the three explicit release films
         shell: bash
         run: |
           set -euo pipefail
@@ -41,6 +41,7 @@ jobs:
           mkdir "$scheme_media_dir"
           curl --fail --silent --show-error --location --output "$scheme_media_dir/scheme-product.mp4" https://github.com/buffbeefalo/scheme/releases/download/v1.1.0/scheme-product.mp4
           curl --fail --silent --show-error --location --output "$scheme_media_dir/scheme-setup.mp4" https://github.com/buffbeefalo/scheme/releases/download/v1.1.0/scheme-setup.mp4
+          curl --fail --silent --show-error --location --output "$scheme_media_dir/scheme-capabilities.mp4" https://github.com/buffbeefalo/scheme/releases/download/v1.1.0/scheme-capabilities.mp4
       - name: Verify reviewed bytes and build the static site
         shell: bash
         run: |

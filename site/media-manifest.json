@@ -39,6 +39,24 @@
       "source": "repository",
       "sha256": "070584d1b533d91b4bf8aa451fc9fcaab6e8122d52264b4fd5ddde0cda9eced1",
       "bytes": 9025
+    },
+    {
+      "path": "media/scheme-capabilities.mp4",
+      "source": "release",
+      "sha256": "4ccc03933d47e3776d6bc483287a2cdcd065d5d621a9f26c4ed8aa624ddecbf7",
+      "bytes": 11896013
+    },
+    {
+      "path": "captions/scheme-capabilities.vtt",
+      "source": "repository",
+      "sha256": "73893022213c14204ba0e15d1e44195b1ded22ddd1624ba8c4a69bf05385506d",
+      "bytes": 5391
+    },
+    {
+      "path": "transcripts/capabilities-transcript.md",
+      "source": "repository",
+      "sha256": "fd3dc7e235faf0230751b1f212c211b330810da4787dbd49e863bc84162dd040",
+      "bytes": 4318
     }
   ],
   "films": [
@@ -147,6 +165,70 @@
         {
           "time": 466.758,
           "title": "Your first session is ready"
+        }
+      ]
+    },
+    {
+      "id": "capabilities",
+      "durationSeconds": 265.083333,
+      "width": 1920,
+      "height": 1080,
+      "chapters": [
+        {
+          "time": 0,
+          "title": "Leave the screen. Keep the work."
+        },
+        {
+          "time": 14.0,
+          "title": "One computer. Your whole workspace."
+        },
+        {
+          "time": 31.0,
+          "title": "Give every task its own place."
+        },
+        {
+          "time": 52.0,
+          "title": "Find the thread again."
+        },
+        {
+          "time": 69.0,
+          "title": "Bring the tools you choose."
+        },
+        {
+          "time": 93.0,
+          "title": "See what the tools report."
+        },
+        {
+          "time": 111.0,
+          "title": "Put a visual reference beside the work."
+        },
+        {
+          "time": 127.0,
+          "title": "Make room to concentrate."
+        },
+        {
+          "time": 140.083333,
+          "title": "Reach it through your private connection."
+        },
+        {
+          "time": 163.083333,
+          "title": "Keep the host working."
+        },
+        {
+          "time": 189.083333,
+          "title": "Read comfortably on a smaller screen."
+        },
+        {
+          "time": 211.083333,
+          "title": "Think first. Send when you are ready."
+        },
+        {
+          "time": 236.083333,
+          "title": "Keep the useful controls within reach."
+        },
+        {
+          "time": 248.083333,
+          "title": "Your computer. Your tools. Any screen."
         }
       ]
     }

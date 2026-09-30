@@ -6,7 +6,7 @@
 
 Scheme puts your terminals and coding tools in a dashboard you can open from a browser. Your projects and processes stay on your own **working computer**; a laptop, second desktop, or phone provides the screen and keyboard. Start with a normal Shell, then add Claude Code, Codex, or a local model when you want one.
 
-**[Watch the product tour](https://buffbeefalo.github.io/scheme/#watch) · [Watch the complete setup](https://buffbeefalo.github.io/scheme/#setup) · [Read the setup guide](INSTALL-HOST.md) · [Download v1.1.0](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.0.zip)**
+**[Watch the capabilities film](https://buffbeefalo.github.io/scheme/#watch) · [88-second introduction](https://buffbeefalo.github.io/scheme/#intro) · [Complete setup](https://buffbeefalo.github.io/scheme/#setup) · [Read the setup guide](INSTALL-HOST.md) · [Download v1.1.0](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.0.zip)**
 
 [![Scheme desktop dashboard running a real Shell in an example workspace.](docs/images/scheme-desktop-demo.png)](https://buffbeefalo.github.io/scheme/#watch)
 

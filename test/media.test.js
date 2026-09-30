@@ -8,6 +8,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { checkMedia } = require('../scripts/check-media');
 const { buildSite, markdown } = require('../scripts/build-site');
+const { previewFixture } = require('./fixtures/preview-media');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'scheme-media-'));
@@ -164,12 +165,19 @@ test('the static build includes readable transcripts and excludes runtime or ext
   fs.writeFileSync(path.join(f.site, 'unlisted.txt'), 'unlisted source fixture');
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'scheme-site-'));
   t.after(() => fs.rmSync(out, { recursive: true, force: true }));
-  const result = buildSite({ root: f.root, mediaDir: f.mediaDir, out });
-  assert.equal(result.files, 21);
+  assert.throws(() => buildSite({ root: f.root, mediaDir: f.mediaDir, out }), /Preview review/);
+  const { previewDir } = previewFixture(f.root);
+  fs.writeFileSync(path.join(f.root, 'package.json'), JSON.stringify({ version: '2.3.4' }));
+  const result = buildSite({ root: f.root, mediaDir: f.mediaDir, previewDir, out });
+  assert.equal(result.files, 28);
   assert.equal(fs.existsSync(path.join(out, 'server.js')), false);
   assert.equal(fs.existsSync(path.join(out, 'unlisted.txt')), false);
   const html = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
   assert.doesNotMatch(html, /\{\{/);
+  assert.match(html, /archive\/refs\/tags\/v2\.3\.4\.zip/);
+  assert.match(html, /blob\/v2\.3\.4\/INSTALL-HOST\.md/);
+  assert.match(html, /previews\/phone-preview-v1\.webm/);
+  assert.equal(fs.existsSync(path.join(out, 'preview-manifest.json')), true);
   assert.match(html, /src="captions\/scheme-product.vtt"/);
   assert.match(html, /src="captions\/scheme-capabilities.vtt"/);
   assert.match(html, /data-player="capabilities-film" data-time="30"/);
@@ -178,7 +186,7 @@ test('the static build includes readable transcripts and excludes runtime or ext
   const capabilities = fs.readFileSync(path.join(out, 'transcripts', 'capabilities-transcript.html'), 'utf8');
   assert.match(capabilities, /Scheme capabilities film/);
   assert.match(capabilities, /href="\.\.\/#watch"/);
-  assert.throws(() => buildSite({ root: f.root, mediaDir: f.mediaDir, out }), /must be empty/);
+  assert.throws(() => buildSite({ root: f.root, mediaDir: f.mediaDir, previewDir, out }), /must be empty/);
 });
 
 test('a failed media review creates no publishable output', (t) => {

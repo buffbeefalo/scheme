@@ -6,7 +6,7 @@ Start with the last step that worked. A successful Shell test on the working com
 
 ## I cannot find the Scheme folder
 
-A ZIP is a package of files. Extract it first, then open the extracted **scheme-1.1.0** release folder, or **scheme-main** if you chose the latest main branch. You should see `README.md`, `server.js`, and `bin` inside it.
+A ZIP is a package of files. Extract it first, then open the extracted **scheme-1.1.1** release folder, or **scheme-main** if you chose the latest main branch. You should see `README.md`, `server.js`, and `bin` inside it.
 
 On Ubuntu, right-click empty space inside that folder and choose **Open in Terminal**. Or type `cd ` in Terminal, drag the folder into the window, and press Enter. Run `ls`: if those files are absent, you are in the wrong place.
 

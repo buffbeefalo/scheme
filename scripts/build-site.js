@@ -5,6 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { ASSETS, checkMedia, sha256, readText, options } = require('./check-media');
+const { PREVIEW_FILES, checkPreviews } = require('./check-previews');
 
 const STATIC_FILES = ['styles.css', 'site.js', 'icon.svg'];
 const IMAGES = ['scheme-desktop-demo.png', 'scheme-mobile-demo.png', 'scheme-sessions-demo.png'];
@@ -52,22 +53,27 @@ function regular(file) {
   if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('A site source is not a regular file.');
   return file;
 }
-function buildSite({ root = path.join(__dirname, '..'), mediaDir, out } = {}) {
+function buildSite({ root = path.join(__dirname, '..'), mediaDir, previewDir, out } = {}) {
   const checked = checkMedia({ root, mediaDir });
   if (checked.issues.length) throw new Error(`Media review must pass before building:\n${checked.issues.join('\n')}`);
+  const previews = checkPreviews({ root, previewDir });
+  if (previews.issues.length) throw new Error(`Preview review must pass before building:\n${previews.issues.join('\n')}`);
   const sourceRoot = path.resolve(root);
   if (!out) throw new Error('An output directory is required.');
   const destination = path.resolve(out);
   const inside = (parent, child) => child === parent || child.startsWith(`${parent}${path.sep}`);
   if (inside(sourceRoot, destination) || inside(destination, sourceRoot) || inside(path.resolve(mediaDir), destination)
-    || inside(destination, path.resolve(mediaDir))) throw new Error('Keep the site output outside the source and render directories.');
+    || inside(destination, path.resolve(mediaDir)) || inside(path.resolve(previewDir), destination)
+    || inside(destination, path.resolve(previewDir))) throw new Error('Keep the site output outside the source and render directories.');
   if (fs.existsSync(destination)) {
     const stat = fs.lstatSync(destination);
     if (!stat.isDirectory() || stat.isSymbolicLink() || fs.readdirSync(destination).length) throw new Error('The output directory must be empty and not a symlink.');
   }
   const site = path.join(sourceRoot, 'site');
   const content = new Map();
-  const tokens = {};
+  const version = JSON.parse(readText(regular(path.join(sourceRoot, 'package.json')))).version;
+  if (typeof version !== 'string' || !/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('A stable software version is required.');
+  const tokens = { softwareTag: `v${version}` };
   for (const film of checked.manifest.films) {
     const transcript = readText(regular(path.join(site, 'transcripts', `${film.id}-transcript.md`)));
     const html = markdown(transcript);
@@ -88,7 +94,7 @@ function buildSite({ root = path.join(__dirname, '..'), mediaDir, out } = {}) {
     used.add(key);
     return tokens[key];
   });
-  if (used.size !== Object.keys(tokens).length) throw new Error('A required film field is missing from the site template.');
+  if (used.size !== Object.keys(tokens).length) throw new Error('A required field is missing from the site template.');
   content.set('index.html', html);
   content.set('.nojekyll', '');
   // Resolve every source before writing any output. Only these reviewed paths are copied.
@@ -96,7 +102,9 @@ function buildSite({ root = path.join(__dirname, '..'), mediaDir, out } = {}) {
     ...STATIC_FILES.map((file) => [regular(path.join(site, file)), file]),
     ...IMAGES.map((file) => [regular(path.join(sourceRoot, 'docs', 'images', file)), `assets/${file}`]),
     ...ASSETS.map((asset) => [regular(asset.source === 'release' ? path.join(mediaDir, path.basename(asset.path)) : path.join(site, asset.path)), asset.path]),
+    ...PREVIEW_FILES.map(file => [regular(path.join(previewDir, file)), `previews/${file}`]),
     [regular(path.join(site, 'media-manifest.json')), 'media-manifest.json'],
+    [regular(path.join(site, 'preview-manifest.json')), 'preview-manifest.json'],
   ];
   fs.mkdirSync(destination, { recursive: true });
   for (const [source, relative] of copies) {
@@ -105,7 +113,7 @@ function buildSite({ root = path.join(__dirname, '..'), mediaDir, out } = {}) {
     fs.copyFileSync(source, target, fs.constants.COPYFILE_EXCL);
   }
   // Verify the staged bytes as well: a changed input cannot silently pass after the first check.
-  for (const asset of checked.manifest.assets) if (sha256(path.join(destination, asset.path)) !== asset.sha256) throw new Error('Staged media changed after review; discard this build.');
+  for (const asset of [...checked.manifest.assets, ...previews.manifest.assets]) if (sha256(path.join(destination, asset.path)) !== asset.sha256) throw new Error('Staged media changed after review; discard this build.');
   for (const [relative, text] of content) {
     const target = path.join(destination, relative);
     fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -115,8 +123,8 @@ function buildSite({ root = path.join(__dirname, '..'), mediaDir, out } = {}) {
 }
 if (require.main === module) {
   try {
-    const args = options(process.argv.slice(2), ['--media-dir', '--out']);
-    const result = buildSite({ mediaDir: args['--media-dir'], out: args['--out'] });
+    const args = options(process.argv.slice(2), ['--media-dir', '--preview-dir', '--out']);
+    const result = buildSite({ mediaDir: args['--media-dir'], previewDir: args['--preview-dir'], out: args['--out'] });
     console.log(`Static site built: ${result.files} explicit public files. No Scheme runtime is included.`);
   } catch (error) {
     console.error(`Site build failed: ${error.message}`);

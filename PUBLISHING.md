@@ -8,6 +8,12 @@ The runtime uses `server.js`, `lib/`, `public/`, and `bin/`. The remaining files
 
 The separate `site/` directory presents Scheme and its films. It is a static website, not another installation of the runtime. Its build copies an explicit list of public presentation files; it never copies the Scheme server, runtime configuration, terminal history, or project folders.
 
+## Software version and media provenance
+
+`package.json` is the software-version authority. The current patch is **v1.1.1**. Keep current README/download links, setup folder examples, and the intended release tag consistent with it. The site renders its `softwareTag` template token from that package version, so its current source, guide, and ZIP links come from the same release. `check:release` rejects conflicting software links, labels, clone examples, or extracted-folder names.
+
+The existing **v1.1.0** references have two separate historical purposes: the original manual setup/continuity validation, and the fixed provenance of the three narrated films with their captions/transcripts. Their tag and reviewed bytes remain unchanged. Those films demonstrate the earlier runtime and do not certify the later repaired code. The new silent preview assets are independently pinned to v1.1.1; that media pin is also provenance, not a setting to advance automatically for each software version. Regression-test fixtures may deliberately use older versions to prove that stale references or deployments are refused.
+
 ## Local checks
 
 Run from a clean Scheme source directory with Node.js 22+ and tmux:
@@ -17,7 +23,7 @@ npm test
 npm run check:release
 ```
 
-The release check walks the actual filesystem, including hidden, ignored, and untracked entries. Only root Git metadata (`.git`) is excluded. It compares against the reviewed file list in `release-files.json`, rejects runtime files and symlinks, checks UTF-8 text, checks local Markdown links, flags non-example home paths and a small set of credential shapes, and verifies the existing xterm bundle hash. Individually inspected demonstration PNGs under `docs/images/` are pinned by filename, signature, and exact hash; no other binary files are allowed. It does not read or print the contents of unexpected files.
+The release check walks the actual filesystem, including hidden, ignored, and untracked entries. Only root Git metadata (`.git`) is excluded. It compares against the reviewed file list in `release-files.json`, rejects runtime files and symlinks, checks UTF-8 text, checks local Markdown links and software-version references, flags non-example home paths and a small set of credential shapes, and verifies the existing xterm bundle hash. Individually inspected demonstration PNGs under `docs/images/` are pinned by filename, signature, and exact hash; no other binary files are allowed. It does not read or print the contents of unexpected files.
 
 A new or changed manifest entry needs a content review. Never regenerate the file list from everything currently on disk merely to make the check pass. Do not keep test output, scanner reports, agent state, or personal/live screenshots in the release folder. Store reports outside it. Approved demonstration screenshots use entirely fictional data and need a fresh visual and metadata review whenever their bytes change.
 
@@ -32,6 +38,25 @@ env -i PATH="$PATH" HOME="$scheme_test_dir/home" TMPDIR="$scheme_test_dir" TMUX_
 ```
 
 Keep the temporary directory until you have checked the result and ended any sessions the tests left behind. This command deliberately selects Shell and scroll tests; enabling every opt-in integration test can involve agent launch paths.
+
+## Optional browser and fish checks
+
+The browser regression suites use the shipped interface with fictional endpoints on a temporary loopback server. They do not connect to a real Scheme session or a signed-in AI tool. Use a separate Playwright installation with its compatible Chromium browser, kept outside the release folder:
+
+```bash
+SCHEME_BROWSER_TESTS=1 SCHEME_PLAYWRIGHT_MODULE=/path/to/node_modules/playwright \
+  node --test test/frontend-regressions.test.js test/workspace-browser.test.js
+```
+
+If needed, set `SCHEME_CHROMIUM_EXECUTABLE` to an existing compatible Chromium executable. These are interface checks, not validation of physical phones, native Safari, or the public films' video codec support. Without `SCHEME_BROWSER_TESTS=1`, both browser suites report a skip.
+
+The prompt-quoting regression always checks sh and Bash. Include an installed fish executable explicitly to check fish as well:
+
+```bash
+SCHEME_TEST_FISH=/path/to/fish node --test test/reported-server-regressions.test.js
+```
+
+Without that variable, the quoting test still passes or fails for sh and Bash; its result does not establish fish coverage. The same variables can be supplied to `npm test` to include these checks in the full suite. Keep test output and any `SCHEME_UI_SCREENSHOTS` directory outside the source tree.
 
 ## Scan both files and history
 
@@ -55,8 +80,11 @@ When changing an exception, inspect the matched content and show that another cr
 | Check | Evidence it provides | Limit |
 |---|---|---|
 | Default `npm test` | Deterministic module behavior and a local server with private test state. | Includes skipped cases; no proof of live AI sign-in, current provider compatibility, or real phone behavior. |
+| Opt-in Chromium browser checks | Shipped interface behavior against fictional session endpoints, including the reported browser regressions. | Requires the browser flag and external test tools; does not validate native Safari, physical phones, or film playback. |
+| Prompt quoting with fish enabled | Literal launch-prompt arguments survive the tested fish executable as well as sh and Bash. | Fish is exercised only when `SCHEME_TEST_FISH` supplies its executable. |
 | Selected Shell/scroll integration | Real tmux session creation, reconnection-related state, and scroll behavior on the tested host. | Does not exercise a paid model or every supported host/browser combination. |
-| `npm run check:release` | Reviewed file inventory, runtime-file rejection, known text hazards, local Markdown targets, and pinned xterm bytes. | A small hygiene check, not comprehensive secret detection, external-link testing, or a privacy guarantee. |
+| `npm run check:release` | Reviewed file inventory, runtime-file rejection, known text hazards, local Markdown targets, current software-version references, and pinned xterm bytes. | A small hygiene check, not comprehensive secret detection, external-link testing, or a privacy guarantee. |
+| Pages release guard tests | Published-release selection, exact commit/version matching, old or prerelease event refusal, and fresh checks after a simulated deployment wait. | Live GitHub permissions and environment rules still need a hosted run. |
 | Working-tree Gitleaks | Known credential patterns in current files under the scanner's rules. | Heuristics can miss unknown formats or sensitive text that is not a credential. |
 | Full-history Gitleaks | Those patterns in locally available Git history. | Unavailable refs and external artifacts need their own review. |
 | Human content and setup review | Accurate guides, generic examples, understandable steps, and assessment of material the scanners do not understand. | Record which OS, browser, and tool versions were actually exercised. |
@@ -71,11 +99,11 @@ The workflow badges show GitHub's latest reported main-branch results; they can 
 
 The default suite skips the unavailable `0.144.6 fixture` transcript case by name and leaves opt-in integration cases skipped unless requested.
 
-The [capability guide](CAPABILITIES.md#validation-for-v110) records actual Ubuntu ARM64 desktop coverage. macOS and WSL host behavior remain unverified. Resume regression tests do not establish live provider recovery compatibility. A clean scan or passing helper test does not remove those limits.
+The [capability guide](CAPABILITIES.md#validation-for-v111) separates the repaired-source baseline from historical Ubuntu ARM64 desktop coverage. Record new checks with their source revision, enabled options, counts, and date; never relabel the older manual tests as a new release validation. macOS and WSL host behavior remain unverified. Resume regression tests do not establish live provider recovery compatibility. A clean scan or passing helper test does not remove those limits.
 
 ## Review the three films
 
-The v1.1.0 presentation requires exactly these assets:
+The historical v1.1.0 film collection retains exactly these assets:
 
 | Asset | Source location | Published location |
 |---|---|---|
@@ -89,7 +117,7 @@ The v1.1.0 presentation requires exactly these assets:
 
 Review every final film's picture, narration, captions, and transcript for private content and accurate claims. Inspect the file metadata and confirm the intended video and audio streams with `ffprobe`. Use broadly playable H.264 video, AAC audio, a regular MP4 container, and fast-start metadata. Review representative playback, full narration, end-to-end timing, caption readability, and every visible command; sample images or a text scan alone are not enough. Inspect still images and their metadata too, then update their existing reviewed image hashes only after that review.
 
-`site/media-manifest.json` records the fixed release, nine explicit assets, exact byte sizes and SHA-256 values, final duration/dimensions, and chapter starts. Its initial `reviewed: false`, empty hashes, and zero sizes are intentional publication blockers. Fill the record from the final reviewed files and set `reviewed: true` only when that review is complete. The hashes detect changes after review; they cannot establish that the review happened.
+`site/media-manifest.json` records the fixed release, nine explicit assets, exact byte sizes and SHA-256 values, final duration/dimensions, and chapter starts. The current record contains the completed film reviews. For future assets, `reviewed: false`, empty hashes, or zero sizes are publication blockers; record final bytes and set `reviewed: true` only after review. Hashes detect later changes but cannot establish that the review happened. Do not rewrite the historical film record merely because the software version changes.
 
 The media checker rejects unknown or missing assets, unexpected files in the media/caption/transcript directories, symlinks, unpinned release metadata, missing review facts, changed hashes or sizes, non-MP4 video headers, invalid WebVTT, and chapters or captions outside the reviewed duration. It streams hashes so large films need not be loaded into memory. It also caps the combined media at 900 MiB. Codec and visual checks remain a separate review step.
 
@@ -100,13 +128,26 @@ node scripts/check-media.js --media-dir /path/to/reviewed-media
 
 Changing an asset name, release tag, or asset set is a deliberate contract change: review and update the explicit sets in the manifest, checker, build, and workflow together. Do not replace the checks with a wildcard download or an automatic allowlist of everything found on disk.
 
+## Review the silent website previews
+
+Three short, view-only demonstrations use previously reviewed neutral captures: **Shell (6 seconds), sessions (8 seconds), and phone (15.625 seconds)**. Each has a silent WebM and MP4 copy, a still fallback, and its own pause control. They stop when offscreen or the page is hidden, and respect reduced-motion preferences. Narrated films keep their separate click-to-play controls and captions. The phone footage is browser touch emulation, not a physical-device test.
+
+Keep exactly these six reviewed files in a **separate external preview directory**: `shell-preview-v1.mp4`, `shell-preview-v1.webm`, `sessions-preview-v1.mp4`, `sessions-preview-v1.webm`, `phone-preview-v1.mp4`, and `phone-preview-v1.webm`. `site/preview-manifest.json` pins their filenames, review facts, source provenance, sizes, hashes, and v1.1.1 release location independently of the narrated-film manifest. The checker rejects unexpected files or changed bytes; codec support, actual movement, privacy, and readable content still need playback review.
+
+```bash
+node --test test/previews.test.js
+node scripts/check-previews.js --preview-dir /path/to/reviewed-previews
+```
+
+The website browser checks use an external Playwright installation as described above. Set `SCHEME_BROWSER_TESTS=1`, `SCHEME_PLAYWRIGHT_MODULE` to that installation, and `SCHEME_SITE_DIR` to the completed external static build, then run `node --test test/site-browser.test.js`. Without both the browser flag and a build directory, that suite skips itself. Record checks of all three clips, individual pause, film playback coordination, offscreen/background stopping, reduced motion, failed or blocked autoplay, narrow layouts, and keyboard use. Do not treat a browser without a film codec as proof that the reviewed film bytes are broken.
+
 ## Build and preview the public page
 
 After the media check passes, choose a fresh empty output directory **outside the source and render directories**:
 
 ```bash
 scheme_site_dir=$(mktemp -d)
-node scripts/build-site.js --media-dir /path/to/reviewed-media --out "$scheme_site_dir"
+node scripts/build-site.js --media-dir /path/to/reviewed-media --preview-dir /path/to/reviewed-previews --out "$scheme_site_dir"
 python3 -m http.server 8080 --bind 127.0.0.1 --directory "$scheme_site_dir"
 ```
 
@@ -116,15 +157,17 @@ Check desktop and narrow screens, keyboard focus, reduced motion, all player err
 
 ## Release and GitHub Pages
 
-The Pages workflow follows [GitHub's custom-workflow deployment model](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages). Set the repository's **Settings → Pages → Source** to **GitHub Actions**. The workflow checks out the exact commit that triggered the run; its film downloads remain pinned to the reviewed v1.1.0 release. To publish a page correction, commit it to main and manually run the public-site workflow from main. This also works with the GitHub Pages environment's main-only deployment rule. The matching published-release event can deploy where environment rules permit that tag; publishing another tag does not deploy this version by accident.
+The Pages workflow follows [GitHub's custom-workflow deployment model](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages). Set the repository's **Settings → Pages → Source** to **GitHub Actions**. The repository's Pages environment currently permits **main only**. After publishing a reviewed stable release, manually run **public-site** from **main**. The run keeps its main workflow identity for that environment, selects [GitHub's latest published full release](https://docs.github.com/en/rest/releases/releases#get-the-latest-release), resolves its tag to a commit, and checks out that exact commit for the build. Main edits are not published until included in a new reviewed release.
 
-For a new software release, complete the source and media review before creating its tag. Create the release as a draft, upload its reviewed MP4 attachments, then publish it. This avoids starting the Pages job before the attachments exist. Never replace a reviewed attachment in place.
+Release events are handled explicitly: a **published current stable release** can run the source/media build, but its tag-origin run skips the deployment job because it does not satisfy the main-only environment rule. Old-release and prerelease events fail the guard. Manual runs from tags or other branches also fail. No environment policy is weakened and no release event is silently presented as a deployment.
 
-The capabilities film is an additional, distinctly named attachment to v1.1.0. Its demonstrations use the same runtime as that tag; the presentation updates do not change the runtime. The original tag and all six original reviewed video, caption, and transcript assets remain unchanged. The new film's review record and text assets live on main, which supplies the current Pages presentation. Upload only the new attachment, without an overwrite option, before manually publishing the updated presentation from main. Future changes to published video bytes require a new filename or reviewed release and matching explicit contract; adding a film never authorizes replacing an existing one.
+For a new software release, complete source review, version/link checks, and the tests before creating its tag. Create the release as a draft. Upload only **new reviewed media** needed by its explicit media contracts, then publish it and make it the latest stable release. For v1.1.1 those new attachments are the six named preview files; the three narrated films continue to download from v1.1.0. Later software-only releases do not need copies of unchanged media. Never move a published tag or replace a reviewed attachment in place.
 
-The build job downloads only those three explicit assets from the v1.1.0 release, verifies their SHA-256 values and the source-controlled caption/transcript bytes, and stages the static page. The upload action receives only that explicit staging directory. The deployment job alone receives `pages: write` and `id-token: write`; the source build has read permissions. All actions are pinned to commit hashes. No terminal server runs on Pages.
+The build verifies package-version/tag agreement, source inventory, the three explicit v1.1.0 films, source-controlled captions/transcripts, and six explicit v1.1.1 preview assets. It stages **28 public files**. The upload action receives only that staging directory. All Pages runs share one serialized concurrency group. Inside the deployment job, **after concurrency and environment waits and immediately before deployment**, the guard asks GitHub again for the current published release and resolved tag commit. A newer release, moved tag, recreated release record, or changed checkout stops the stale build; start a fresh run from main. The final check narrows the publication race but does not lock GitHub releases against changes during the deployment action.
 
-After deployment, verify the public page anonymously. Play all three films, seek chapters, display captions, read the transcripts, follow source/setup links, and confirm the release downloads. For a changed runtime, also install the published source ZIP in a fresh location and repeat the doctor and Shell test. A successful local build does not establish public availability.
+The deployment job alone receives `pages: write` and `id-token: write`; it also has `contents: read` for the exact-commit checkout and final release lookup. The source build has only read permissions. All actions are pinned to commit hashes, checkout does not retain credentials, and GitHub event values are passed as environment data rather than inserted into shell commands. No terminal server runs on Pages.
+
+After deployment, verify the public page anonymously. Play the three previews and all three films, seek chapters, display captions, read the transcripts, follow source/setup links, and confirm current release downloads. Check the published archive against the reviewed inventory, install it in a fresh location, and repeat the doctor and Shell test. Exercise both [Git and ZIP updates](INSTALL-HOST.md#updating) on disposable installations, preserving external state, project data, settings, and the existing tmux session. For services, confirm whether the definition was retained or deliberately regenerated from the recorded environment. A successful local build does not establish public availability or upgrade behavior.
 
 ## Before changing visibility or uploading a release
 

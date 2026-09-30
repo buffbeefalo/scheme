@@ -14,13 +14,17 @@ concurrency:
 
 jobs:
   build:
-    if: github.repository == 'buffbeefalo/scheme' && (github.event_name != 'release' || github.event.release.tag_name == 'v1.1.0')
+    if: github.repository == 'buffbeefalo/scheme'
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       pages: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      sha: ${{ steps.release.outputs.sha }}
+      release_id: ${{ steps.release.outputs.release_id }}
     steps:
-      - name: Check out the presentation being published
+      - name: Check out the workflow's release guard
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           ref: ${{ github.sha }}
@@ -29,10 +33,27 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
+      - name: Select the current published stable release
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/pages-release.js select
+      - name: Check out the exact selected release commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ steps.release.outputs.sha }}
+          persist-credentials: false
+      - name: Check the release identity and package version
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SCHEME_RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          SCHEME_RELEASE_SHA: ${{ steps.release.outputs.sha }}
+          SCHEME_RELEASE_ID: ${{ steps.release.outputs.release_id }}
+        run: node scripts/pages-release.js verify
       - name: Check the reviewed source inventory
         run: node scripts/check-release.js
-      - name: Test media validation
-        run: node --test test/media.test.js
+      - name: Test release and media validation
+        run: node --test test/pages-release.test.js test/release-check.test.js test/media.test.js test/previews.test.js
       - name: Download the three explicit release films
         shell: bash
         run: |
@@ -42,28 +63,64 @@ jobs:
           curl --fail --silent --show-error --location --output "$scheme_media_dir/scheme-product.mp4" https://github.com/buffbeefalo/scheme/releases/download/v1.1.0/scheme-product.mp4
           curl --fail --silent --show-error --location --output "$scheme_media_dir/scheme-setup.mp4" https://github.com/buffbeefalo/scheme/releases/download/v1.1.0/scheme-setup.mp4
           curl --fail --silent --show-error --location --output "$scheme_media_dir/scheme-capabilities.mp4" https://github.com/buffbeefalo/scheme/releases/download/v1.1.0/scheme-capabilities.mp4
+      - name: Download the six explicit preview assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          scheme_preview_dir="$RUNNER_TEMP/scheme-preview-media"
+          mkdir "$scheme_preview_dir"
+          curl --fail --silent --show-error --location --output "$scheme_preview_dir/shell-preview-v1.mp4" https://github.com/buffbeefalo/scheme/releases/download/v1.1.1/shell-preview-v1.mp4
+          curl --fail --silent --show-error --location --output "$scheme_preview_dir/shell-preview-v1.webm" https://github.com/buffbeefalo/scheme/releases/download/v1.1.1/shell-preview-v1.webm
+          curl --fail --silent --show-error --location --output "$scheme_preview_dir/sessions-preview-v1.mp4" https://github.com/buffbeefalo/scheme/releases/download/v1.1.1/sessions-preview-v1.mp4
+          curl --fail --silent --show-error --location --output "$scheme_preview_dir/sessions-preview-v1.webm" https://github.com/buffbeefalo/scheme/releases/download/v1.1.1/sessions-preview-v1.webm
+          curl --fail --silent --show-error --location --output "$scheme_preview_dir/phone-preview-v1.mp4" https://github.com/buffbeefalo/scheme/releases/download/v1.1.1/phone-preview-v1.mp4
+          curl --fail --silent --show-error --location --output "$scheme_preview_dir/phone-preview-v1.webm" https://github.com/buffbeefalo/scheme/releases/download/v1.1.1/phone-preview-v1.webm
       - name: Verify reviewed bytes and build the static site
         shell: bash
         run: |
           set -euo pipefail
           node scripts/check-media.js --media-dir "$RUNNER_TEMP/scheme-release-media"
-          node scripts/build-site.js --media-dir "$RUNNER_TEMP/scheme-release-media" --out "$RUNNER_TEMP/scheme-pages"
+          node scripts/check-previews.js --preview-dir "$RUNNER_TEMP/scheme-preview-media"
+          node scripts/build-site.js --media-dir "$RUNNER_TEMP/scheme-release-media" --preview-dir "$RUNNER_TEMP/scheme-preview-media" --out "$RUNNER_TEMP/scheme-pages"
       - name: Configure GitHub Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b
       - name: Upload only the static public artifact
         uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa
         with:
           path: ${{ runner.temp }}/scheme-pages
+      - name: Explain the release-event publication boundary
+        if: github.event_name == 'release'
+        run: echo 'Release build verified. Run this workflow from main to deploy within the main-only GitHub Pages environment.'
   deploy:
     needs: build
+    # The actual Pages environment allows main, not tag-origin release events.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Check out the commit whose site artifact was built
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22
+          package-manager-cache: false
+      # This runs after concurrency and environment waits, directly before deploy.
+      - name: Refuse a superseded release or moved tag immediately before deployment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SCHEME_RELEASE_TAG: ${{ needs.build.outputs.tag }}
+          SCHEME_RELEASE_SHA: ${{ needs.build.outputs.sha }}
+          SCHEME_RELEASE_ID: ${{ needs.build.outputs.release_id }}
+        run: node scripts/pages-release.js verify
       - name: Deploy the verified artifact
         id: deployment
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e

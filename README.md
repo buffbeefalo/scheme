@@ -6,11 +6,11 @@
 
 Scheme puts your terminals and coding tools in a dashboard you can open from a browser. Your projects and processes stay on your own **working computer**; a laptop, second desktop, or phone provides the screen and keyboard. Start with a normal Shell, then add Claude Code, Codex, or a local model when you want one.
 
-**[Watch the capabilities film](https://buffbeefalo.github.io/scheme/#watch) · [88-second introduction](https://buffbeefalo.github.io/scheme/#intro) · [Complete setup](https://buffbeefalo.github.io/scheme/#setup) · [Read the setup guide](INSTALL-HOST.md) · [Download v1.1.0](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.0.zip)**
+**[Watch the capabilities film](https://buffbeefalo.github.io/scheme/#watch) · [88-second introduction](https://buffbeefalo.github.io/scheme/#intro) · [Complete setup](https://buffbeefalo.github.io/scheme/#setup) · [Read the setup guide](INSTALL-HOST.md) · [Download v1.1.1](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.1.zip)**
 
 [![Scheme desktop dashboard running a real Shell in an example workspace.](docs/images/scheme-desktop-demo.png)](https://buffbeefalo.github.io/scheme/#watch)
 
-*Images and films show the real application on clean demonstration desktops with fictional example projects. The phone preview uses browser touch emulation. The films include English captions, chapter links, and readable transcripts.*
+*Images, silent website previews, and films show the real application on clean demonstration desktops with fictional example projects. The phone preview uses browser touch emulation. The narrated films remain click-to-play, with English captions, chapter links, and readable transcripts. The website demonstrations are view-only.*
 
 ## One host, the screen you need
 
@@ -21,7 +21,7 @@ Scheme puts your terminals and coding tools in a dashboard you can open from a b
 - **Leave the browser and return.** Sessions continue on an awake host. A tested Linux service restart also preserved a running Shell; a host reboot creates a new process.
 - **Choose a comfortable view.** Auto, Light, and Dark themes adapt the surrounding dashboard. The terminal keeps its dark background so command output remains readable.
 - **Work with a smaller screen.** Touch keys, a readable terminal snapshot, and a separate writing area help on narrow touch layouts. Physical phone testing remains outside this release's validation.
-- **Bring in a file or follow a link.** Upload into the session's project and open supported tool links on the viewing device.
+- **Attach an image or follow a link.** The **Image** control accepts images and screenshots into the session's project; desktop file drops also support other files. Open supported tool links on the viewing device.
 
 The public application has **Terminal** and **Connect**. [The capability guide](CAPABILITIES.md) explains the controls, tool requirements, and recovery limits.
 
@@ -36,7 +36,13 @@ You do not need a GitHub account or an AI account to download Scheme and try She
 
 If the second screen is a monitor plugged into the host, open the local dashboard there. A separate computer or phone needs a private connection; its own `localhost` address does not automatically reach the host.
 
-## What was tested for v1.1.0
+## Validation for v1.1.1
+
+This patch includes the session, recovery, settings, quoting, and browser repairs from the [September 29 repaired-source revision](https://github.com/buffbeefalo/scheme/commit/df73682eca7c745ababe67281e1ce9c8a760759b). Its local repair suite completed **698 passed, 0 failed, and 8 skipped**, with opt-in Chromium and real-fish checks enabled. That is the repaired-source baseline, not a new manual desktop or phone validation of this patch. [Current validation scope](CAPABILITIES.md#validation-for-v111).
+
+Already using Scheme? Follow the [update steps](INSTALL-HOST.md#updating) to keep your projects, saved sessions, and settings while changing the software folder or Git revision.
+
+## Historical setup validation for v1.1.0
 
 The setup was exercised on **two separate hosted graphical Ubuntu 24.04 ARM64 virtual machines**, each with 8 GiB of memory. One ran Scheme; the other viewed it through an SSH tunnel. Checks included the real Shell, browser closure and return, a Scheme service restart, and host reboot recovery. The smaller-host setup used `SYSMON_MEM_FLOOR_MB=1024`.
 
@@ -66,7 +72,7 @@ Cloud tools use your own accounts, access, and billing. Local models need their 
 For readers comfortable with Git, cloning is an alternative to the ZIP:
 
 ```bash
-git clone --branch v1.1.0 https://github.com/buffbeefalo/scheme.git
+git clone --branch v1.1.1 https://github.com/buffbeefalo/scheme.git
 cd scheme
 bin/scheme-doctor
 bin/scheme

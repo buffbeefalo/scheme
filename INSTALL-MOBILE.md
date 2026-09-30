@@ -30,7 +30,7 @@ For a home-screen shortcut, open Safari's **Share** menu and choose **Add to Hom
 4. Scheme should open. Tap **Terminal**, choose your existing Shell session, and tap inside the terminal to open the keyboard.
 5. Type `echo "Connected from my phone"` and press Enter. You should see **Connected from my phone**.
 
-For a home-screen shortcut, open Chrome's **⋮** menu and choose **Add to Home screen** or **Install app**, whichever your browser offers. [Chrome's web-app guide](https://support.google.com/chrome/answer/9658361?hl=en&co=GENIE.Platform%3DAndroid) explains those options. This opens the same web dashboard; it does not move the coding tools onto your phone.
+For a home-screen entry, [Chrome's current web-app guide](https://support.google.com/chrome/answer/9658361?hl=en&co=GENIE.Platform%3DAndroid) uses **⋮ → Install and create shortcut → Install**. Follow the option available in your browser; older versions may show **Add to Home screen** or **Install app**. This opens the same web dashboard; it does not move the coding tools onto your phone.
 
 ## Everyday phone controls
 

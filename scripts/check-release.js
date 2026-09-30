@@ -129,6 +129,33 @@ function checkRelease(root) {
     }
   }
 
+  // Software downloads and setup examples follow package.json. Historical
+  // validation prose and independently pinned media downloads are not versions
+  // of the current software and deliberately keep their original provenance.
+  if (texts.has('package.json')) {
+    let version;
+    try { version = JSON.parse(texts.get('package.json')).version; } catch { /* reported below */ }
+    if (typeof version !== 'string' || !/^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$/.test(version)) {
+      report('package.json', 'software version must be a stable major.minor.patch value');
+    } else {
+      const tag = `v${version}`;
+      for (const [name, text] of texts) {
+        if (!name.endsWith('.md') && name !== 'site/index.html') continue;
+        const links = [...text.matchAll(/https:\/\/github\.com\/buffbeefalo\/scheme\/(?:archive\/refs\/tags|releases\/tag|blob|tree)\/(v\d+\.\d+\.\d+)(?=[/.#?"')\s]|$)/g)];
+        const labels = [...text.matchAll(/\[([^\]\n]+)\]\(https:\/\/github\.com\/buffbeefalo\/scheme\/(?:archive\/refs\/tags|releases\/tag)\/[^)]+\)/g)]
+          .flatMap((link) => [...link[1].matchAll(/\bv\d+\.\d+\.\d+\b/g)].map((match) => match[0]));
+        const clones = [...text.matchAll(/git clone --branch (v\d+\.\d+\.\d+)\b/g)];
+        const folders = ['README.md', 'INSTALL-HOST.md', 'TROUBLESHOOTING.md'].includes(name)
+          ? [...text.matchAll(/\bscheme-(\d+\.\d+\.\d+)\b/g)].map((match) => `v${match[1]}`) : [];
+        if ([...links.map((match) => match[1]), ...labels, ...clones.map((match) => match[1]), ...folders]
+          .some((reference) => reference !== tag)) report(name, 'software version reference differs from package.json');
+        if (name === 'site/index.html' && links.length) {
+          report(name, 'software version links must use the softwareTag template token');
+        }
+      }
+    }
+  }
+
   // Deliberately small Markdown check: inline links, reference definitions, ATX headings, and HTML ids.
   // External URLs are reviewed separately; no network requests are made here.
   for (const [name, text] of texts) {

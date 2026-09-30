@@ -51,11 +51,13 @@ Focus and Usage are available through the mobile tool controls. Keyboard layout 
 
 ## Uploads and browser links
 
-Uploads go into a `.cc-uploads` folder inside the current session's project. Review the destination and file before uploading: it becomes available to commands running with your host account's access. Scheme also relays supported links opened by tools to the viewing browser. These conveniences are not a separate file sync service.
+The **Image** button opens an image picker; pasting a screenshot also uses the image attachment path. Desktop drag-and-drop supports other file types through the attachment strip. It is not a general file-picker or file-management interface.
+
+Uploaded files go into a `.cc-uploads` folder inside the current session's project. Review the destination and file before uploading: it becomes available to commands running with your host account's access. Scheme also relays supported links opened by tools to the viewing browser. These conveniences are not a separate file sync service.
 
 ## Continuity: what survives
 
-| Event | What happens | Evidence for this release |
+| Event | What happens | Historical v1.1.0 desktop evidence or limitation |
 |---|---|---|
 | Close the browser completely | The browser detaches; the host terminal can continue. Reopen the page through the same private connection. | A deliberately unfinished Shell job completed while the viewing browser was absent; the same terminal was recovered. |
 | Restart the Linux Scheme service | The web process restarts and reconnects to existing tmux sessions. | The web process changed while the terminal process and creation time stayed the same; its running job finished. |
@@ -69,7 +71,21 @@ Automatic Codex recovery resumes only a verified interactive CLI conversation. I
 
 The default idle cleanup considers old sessions, but working and waiting sessions are retained. Unknown activity is not sufficient evidence that an agent is idle. A revived tab retains its original age for cleanup decisions. See [configuration](CONFIGURATION.md#all-settings) for the threshold.
 
+## Validation for v1.1.1
+
+The patch includes the fixes in [the September 29 repaired-source revision](https://github.com/buffbeefalo/scheme/commit/df73682eca7c745ababe67281e1ce9c8a760759b): safer saved-tab recovery and settings updates, literal launch-prompt arguments, clearer telemetry, and browser/session behavior repairs. Before this release-alignment work, that revision's full local suite recorded **698 passed, 0 failed, 8 skipped**. Opt-in Chromium checks and the installed fish shell were enabled. The [publication guide](PUBLISHING.md#optional-browser-and-fish-checks) explains how to enable those checks; the default suite alone does not establish that coverage.
+
+The repaired-source baseline also had a separate final review with **188 passed and no remaining review findings**. Its [hosted test run](https://github.com/buffbeefalo/scheme/actions/runs/36672902632) passed the default suite with **654 passed and 11 skipped**; different enabled checks account for the different totals. These are dated baseline results, not a claim that the newly added publication guards and website previews were included in those runs. Fresh release-specific results are recorded below and in the [v1.1.1 release notes](https://github.com/buffbeefalo/scheme/releases/tag/v1.1.1).
+
+Release-alignment checks on **September 30, 2026** recorded **729 passed, 0 failed, 8 skipped** in the full suite, with Chromium, fish, and the built public-site checks enabled. This includes nine public-site browser checks covering decoded preview frames, looping, pause/resume, reduced motion, keyboard use, film coordination, unavailable media, blocked autoplay, and narrow layouts. Background stopping was checked with a controlled browser visibility signal; the graphical automation did not establish a real hidden-tab transition. A separate graphical Chromium check played all three original films, sought chapters, displayed captions, and played all three previews through both WebM and MP4.
+
+Disposable Linux **Git and ZIP updates** from v1.1.0 preserved the same real Shell pane and process, its running job, external project files, saved state, and settings. All four before/after doctor checks passed the required tools. Linux/macOS service definitions were checked with re-exported settings; real service-manager upgrades were not repeated. These were prepublication source-snapshot checks, with the final public archive checked separately during publication.
+
+The three narrated films and earlier desktop/setup evidence below remain tied to v1.1.0. New silent previews reuse clean, fictional demonstration footage and are view-only; they do not establish a new operating-system, cloud-account, or physical-phone validation. macOS/WSL hosting, physical phones, real cloud sign-in, and an account-backed Tailscale connection remain outside the validated scope.
+
 ## Validation for v1.1.0
+
+This is **historical setup evidence** for the original release. It is retained without presenting it as a new v1.1.1 manual test.
 
 The desktop setup used **two separate graphical Ubuntu 24.04 ARM64 virtual machines**, each with 4 virtual CPUs, 8 GiB of memory, and its own disk. Both ran an XFCE desktop with a real graphical Chromium browser. The host ran Scheme; the viewing desktop reached it through an SSH tunnel. These were hosted desktop machines, not a browser viewport presented as a second operating system.
 

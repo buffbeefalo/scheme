@@ -6,7 +6,7 @@ The **working computer**, also called the **host**, is where your files and tool
 
 The main steps below are for Ubuntu/Debian Linux, including the Linux path used by DGX Spark. The v1.1.0 setup was exercised on an Ubuntu 24.04 ARM64 graphical host with 8 GiB of memory, plus a second Ubuntu desktop connected through SSH. Allow extra time for downloads. You do not need to know Git or install an AI tool to try Scheme.
 
-[Watch the complete setup film](https://buffbeefalo.github.io/scheme/#setup) alongside these steps. It includes chapters, captions, and a readable transcript. [The validation guide](CAPABILITIES.md#validation-for-v110) separates exercised features from unverified account and device setup.
+[Watch the complete setup film](https://buffbeefalo.github.io/scheme/#setup) alongside these steps. It includes chapters, captions, and a readable transcript. The film shows the historical v1.1.0 setup; use the current v1.1.1 download below. [The validation guide](CAPABILITIES.md#validation-for-v111) separates current repair checks, historical setup evidence, and unverified account/device setup.
 
 ## 1. Open Terminal and install the basics
 
@@ -53,13 +53,13 @@ Success means the last command prints **v22…**. The installer selects the comp
 
 **On the working computer, in its browser:**
 
-1. Open the [Scheme v1.1.0 release](https://github.com/buffbeefalo/scheme/releases/tag/v1.1.0).
-2. Choose **Source code (zip)**, or use the [direct v1.1.0 ZIP download](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.0.zip). The project page’s green **Code** button also offers **Download ZIP**, which downloads the latest main branch instead of a pinned release.
-3. Open the downloaded ZIP and choose **Extract** or **Extract All**. The release normally creates **scheme-1.1.0**; the main-branch download creates **scheme-main**.
+1. Open the [Scheme v1.1.1 release](https://github.com/buffbeefalo/scheme/releases/tag/v1.1.1).
+2. Choose **Source code (zip)**, or use the [direct v1.1.1 ZIP download](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.1.zip). The project page’s green **Code** button also offers **Download ZIP**, which downloads the latest main branch instead of a pinned release.
+3. Open the downloaded ZIP and choose **Extract** or **Extract All**. The release normally creates **scheme-1.1.1**; the main-branch download creates **scheme-main**.
 4. Move that extracted folder somewhere you will keep it, such as your home folder. Scheme will run from there. Do not try to run it inside the ZIP viewer.
-5. Open the extracted **scheme-1.1.0** folder in the file manager (or **scheme-main**, if that is what you downloaded). On Ubuntu, right-click empty space in the folder and choose **Open in Terminal**. You should see files including `README.md`, `server.js`, and a `bin` folder.
+5. Open the extracted **scheme-1.1.1** folder in the file manager (or **scheme-main**, if that is what you downloaded). On Ubuntu, right-click empty space in the folder and choose **Open in Terminal**. You should see files including `README.md`, `server.js`, and a `bin` folder.
 
-If **Open in Terminal** is unavailable, open Terminal, type `cd ` with a space after it, drag the extracted folder into the terminal window, and press Enter. This changes the terminal's current folder. Alternatively, if you moved it to your home folder, run `cd ~/scheme-1.1.0` (or `cd ~/scheme-main` for the main-branch download).
+If **Open in Terminal** is unavailable, open Terminal, type `cd ` with a space after it, drag the extracted folder into the terminal window, and press Enter. This changes the terminal's current folder. Alternatively, if you moved it to your home folder, run `cd ~/scheme-1.1.1` (or `cd ~/scheme-main` for the main-branch download).
 
 **In that terminal, inside the extracted Scheme folder:**
 
@@ -197,7 +197,7 @@ First make sure the foreground setup and a Shell tab work. You can then install 
 bin/install-service.sh
 ```
 
-The installer saves your current PATH and supported Scheme settings, including explicitly empty values. It does not copy API keys or the identity of the agent session running the installer. Existing agent sign-ins remain in their normal configuration folders.
+The installer writes a new service definition from your current PATH and supported Scheme settings, including explicitly empty values. **Rerunning it replaces the generated service definition; it does not recover settings or custom edits from the existing definition.** It does not copy API keys or the identity of the agent session running the installer. Existing agent sign-ins remain in their normal configuration folders.
 
 On Linux it installs a user systemd service and attempts to enable “lingering,” which allows it to run after logout and start on boot. If that requires extra permission, the installer prints the command to run. On macOS the launch agent starts at user login. Inside WSL2, systemd and the WSL distribution must already be running; this does not start Windows or WSL for you.
 
@@ -215,11 +215,44 @@ Removal leaves project files and agent conversations in place. A real restart of
 
 ## Updating
 
-**If you downloaded a ZIP:** stop the Scheme server, download and extract the intended release ZIP into a new folder, and start it from that folder. Keep your own projects outside the Scheme download folder. If you use the background service, rerun its installer from the new folder. Keep the old folder until the update works.
+Update on the **same host account** without rebooting or stopping tmux. Stopping only Scheme's web server leaves its tmux terminals running; saved metadata and agent history normally live outside the software folder. Updates do not restore work lost in a reboot. Keep a backup of your external state and any custom service definition before changing an installation.
 
-**If you cloned a tagged release, as shown in the readme:** Git keeps that installation on the chosen release rather than a moving branch. Run `git fetch --tags`, then `git switch --detach <release-tag>`, replacing `<release-tag>` with the release you intend to install. Preserve any local changes before switching; do not force the switch. Restart the foreground server or rerun the background installer from that folder.
+### Preserve your settings and running sessions
 
-**If your Git clone follows the main branch:** run `git pull --ff-only` in your Scheme folder, then restart the foreground server or rerun the background installer. There is no build or `npm install` step for Scheme itself.
+1. Keep projects and their `.cc-uploads` folders outside the Scheme source folder. If you already keep projects inside the old download, leave that old folder in place so existing terminal paths remain valid; move the projects separately after their jobs finish.
+2. Keep `~/.claude/command-deck/`, your agent configuration/history directories, and any custom `COMMAND_DECK_REGISTRY`, `COMMAND_DECK_AUDIT`, or `COMMAND_DECK_NOTES` paths in place. Do not copy those private files into the new source tree. Keep the same `SYSMON_TMUX_SOCKET`, if set, so the new server reaches the existing terminal server.
+3. Record your [supported settings](CONFIGURATION.md#all-settings), including the port, project paths, memory reserve, local-model choices, PATH, and shell. For the Linux service, `systemctl --user cat scheme.service` shows the generated definition and any overrides. Review it privately; do not paste it into a public report. Back up custom edits before proceeding.
+4. Re-export the settings in the terminal you will use for the update. An existing service's environment is not automatically imported into your terminal. **The installer rewrites the generated service from that terminal's settings.** Preserve and review any separate systemd overrides; they may override the new definition. Custom launchd settings on macOS also need to be retained separately.
+
+### Update a ZIP installation
+
+1. Download the [v1.1.1 ZIP](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.1.zip) and extract it into a **new** folder. Do not extract over the old installation. Keep the old folder for rollback and for any running processes that still use paths under it.
+2. Open a terminal in the new **scheme-1.1.1** folder with your recorded settings exported. Run the `chmod` command from [step 2](#2-download-and-open-scheme), then `bin/scheme-doctor`. Resolve required-tool failures before stopping the working server.
+3. Stop only the old Scheme server: press **Ctrl+C** in its foreground terminal, or use `systemctl --user stop scheme.service` for the supplied Linux service. Do not close the Scheme tabs or kill tmux. Avoid starting two servers against the same saved state.
+4. For foreground use, run `bin/scheme` from the new folder. For the Linux service, run `bin/install-service.sh` there with the recorded settings still exported; it replaces the service's launch path and starts the new server. The macOS installer also replaces its launch-agent definition; that platform's update route remains unverified.
+5. Refresh the dashboard and confirm the expected project paths, settings, and existing Shell session before starting new work. Run the [first-Shell check](#4-try-a-terminal-with-no-ai) if needed. If the update fails, stop the new web server and launch from the old folder with the same settings. For a service rollback, regenerate it from the old folder with those settings, then reapply any backed-up custom edits and restart it. Leave external state and tmux intact.
+
+### Update a Git installation
+
+In the existing Scheme checkout, run `git status --short`. Commit or separately back up any local edits and untracked work before switching; do not force a checkout or discard changes. Record the current revision with `git rev-parse HEAD` for rollback. Then fetch and inspect the intended release:
+
+```bash
+git fetch origin tag v1.1.1
+git show --no-patch --oneline v1.1.1
+```
+
+Stop only the Scheme web server as described above, then select the release without moving your own branches:
+
+```bash
+git switch --detach v1.1.1
+bin/scheme-doctor
+```
+
+If Git reports a local tag conflict or cannot switch cleanly, stop and inspect it; do not use force. Start `bin/scheme` with the same exported settings. If the existing Linux service already points to this unchanged folder and its settings need no change, use `systemctl --user start scheme.service` to retain its existing definition. Only rerun `bin/install-service.sh` when you intend to regenerate that definition, after preserving and re-exporting its supported settings.
+
+Confirm the same project/session checks as for the ZIP route. For rollback, stop the web server, use `git switch --detach` with the revision you recorded, and restart with the prior settings. Reverting software does not revert changes your running tools made to projects or external state.
+
+If you intentionally follow **main** instead of releases, use a clean checkout and `git pull --ff-only` after stopping the web server; a refusal needs review, not force. Main may contain unreleased changes. There is no build or `npm install` step for Scheme itself.
 
 ## Troubleshooting
 

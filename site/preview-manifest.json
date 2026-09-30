@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "repository": "buffbeefalo/scheme",
+  "releaseTag": "v1.1.1",
+  "reviewed": true,
+  "provenance": "Short silent excerpts of neutral Scheme recordings prepared for the original public films. Desktop clips use a fictional example workspace; the phone clip uses browser touch emulation, not a physical device. No production dashboard footage.",
+  "assets": [
+    {
+      "path": "previews/shell-preview-v1.mp4",
+      "bytes": 75953,
+      "sha256": "b2442d4377233417a1f538e8c0ba8ea2397e3915adb3be30e31a7827211bc5ce"
+    },
+    {
+      "path": "previews/shell-preview-v1.webm",
+      "bytes": 117204,
+      "sha256": "c39adcc81a46aab21ef32345c84bed9e918de4d79b8a0a23361bec2b9b043e83"
+    },
+    {
+      "path": "previews/sessions-preview-v1.mp4",
+      "bytes": 129571,
+      "sha256": "fbafb57a425003b08d037b69abab80a10e70b49e96d6abbe6800525c265ad58c"
+    },
+    {
+      "path": "previews/sessions-preview-v1.webm",
+      "bytes": 152511,
+      "sha256": "10f378373890a0e70a36aec7c94b934a664cf703a684c28c84cae80624c87139"
+    },
+    {
+      "path": "previews/phone-preview-v1.mp4",
+      "bytes": 206251,
+      "sha256": "fd31dd2a8ae3472ef336c9da08f6cd608099edf9d5af8c46d6f4bb4b3c2598b6"
+    },
+    {
+      "path": "previews/phone-preview-v1.webm",
+      "bytes": 192551,
+      "sha256": "729e88cf358dd880a1cf4774332622d4734ad497c7cb6766f1ed5cd993609cde"
+    }
+  ],
+  "clips": [
+    {
+      "id": "shell",
+      "durationSeconds": 6,
+      "width": 1440,
+      "height": 810,
+      "sourceCaptureSha256": "aef7724b1fc4f6eaeafb0b71ef1459bf8f0eaa7eee63503fbaba191b7ff6853e",
+      "sourceStartSeconds": 0,
+      "description": "Run a harmless Shell command and example tests."
+    },
+    {
+      "id": "sessions",
+      "durationSeconds": 8,
+      "width": 1440,
+      "height": 810,
+      "sourceCaptureSha256": "365a2bce55797df262f4c2b78fe0e96aeaa9819a28f3495254d6688f54c26705",
+      "sourceStartSeconds": 0,
+      "description": "Create and switch between example Shell sessions."
+    },
+    {
+      "id": "phone",
+      "durationSeconds": 15.625,
+      "width": 390,
+      "height": 844,
+      "sourceCaptureSha256": "cb0c4d9590cd124af15bbb9e97c17b089db443e08bfcf8b604428a8232ed1cf7",
+      "sourceStartSeconds": 0,
+      "description": "Open the phone reading view and adjust text size in browser touch emulation."
+    }
+  ]
+}

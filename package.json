@@ -1,6 +1,6 @@
 {
   "name": "scheme",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Self-hosted cockpit: drive Claude Code, Codex or a local LLM running on one machine from a browser on another.",
   "license": "MIT",
   "private": true,

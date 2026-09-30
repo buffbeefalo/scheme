@@ -15,7 +15,9 @@ npm test
 npm run check:release
 ```
 
-The default suite uses Node's test runner. Server tests use disposable state and private tmux sockets; they do not require signed-in AI tools. Tests do not verify every real provider version or every browser. One Codex transcript-fixture case is excluded by the test command because its private rollout data is not shipped. Additional real-session integration cases are opt-in; see [verification coverage](PUBLISHING.md#what-the-checks-do-and-do-not-cover).
+The default suite uses Node's test runner. Server tests use disposable state and private tmux sockets; they do not require signed-in AI tools. Tests do not verify every real provider version or every browser. One Codex transcript-fixture case skips itself because its private rollout data is not shipped. Browser checks and additional real-session integration cases are opt-in; see [verification coverage](PUBLISHING.md#what-the-checks-do-and-do-not-cover). The prompt-quoting test exercises sh and Bash by default; fish is included only when its executable is supplied.
+
+The [optional browser and fish checks](PUBLISHING.md#optional-browser-and-fish-checks) explain how to include those checks without adding development tools to the release folder.
 
 Use a UTF-8 locale for terminal integration. Do not run broad integration flags against your live agents or shared sessions. The selected Shell and scroll tests can be exercised with an isolated home and tmux directory without an AI provider; the [release guide](PUBLISHING.md#local-checks) gives that command.
 

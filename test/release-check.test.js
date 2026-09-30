@@ -157,3 +157,38 @@ test('release check refuses a non-PNG binary exception even when its hash matche
   assert.equal(r.status, 1);
   assert.match(r.stdout + r.stderr, /demo\.png.*PNG/i);
 });
+
+test('software links and extracted folder names must match the package version', (t) => {
+  const f = fixture(t, {
+    'package.json': '{"version":"1.1.1"}',
+    'README.md': '[Download v1.1.0](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.0.zip)\n',
+    'INSTALL-HOST.md': 'git clone --branch v1.1.0 https://github.com/buffbeefalo/scheme.git\nOpen scheme-1.1.0\n',
+    'site/index.html': '<a href="https://github.com/buffbeefalo/scheme/blob/v1.1.0/INSTALL-HOST.md">Setup</a>',
+  });
+  const r = f.run();
+  assert.equal(r.status, 1);
+  for (const name of ['README.md', 'INSTALL-HOST.md', 'site/index.html']) assert.ok(r.stderr.includes(`${name}: software version`), r.stderr);
+});
+
+test('current software references coexist with historical validation and independently pinned films', (t) => {
+  const f = fixture(t, {
+    'package.json': '{"version":"1.1.1"}',
+    'README.md': '[Download v1.1.1](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.1.zip)\n## Historical validation for v1.1.0\n',
+    'INSTALL-HOST.md': 'git clone --branch v1.1.1 https://github.com/buffbeefalo/scheme.git\nOpen scheme-1.1.1\n',
+    'site/index.html': '<a href="https://github.com/buffbeefalo/scheme/blob/{{softwareTag}}/INSTALL-HOST.md">Setup</a>',
+    'site/media-manifest.json': '{"tag":"v1.1.0","url":"https://github.com/buffbeefalo/scheme/releases/download/v1.1.0/scheme-product.mp4"}',
+  });
+  const r = f.run();
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test('release check rejects a stale download label even if its target is current', (t) => {
+  const f = fixture(t, { 'package.json': '{"version":"1.1.1"}',
+    'README.md': '[Download v1.1.0](https://github.com/buffbeefalo/scheme/archive/refs/tags/v1.1.1.zip)\n' });
+  assert.match(f.run().stderr, /README\.md: software version/);
+});
+
+test('release check refuses a malformed or prerelease package version', (t) => {
+  const f = fixture(t, { 'package.json': '{"version":"1.1.1-beta"}' });
+  assert.match(f.run().stderr, /package\.json: software version/);
+});

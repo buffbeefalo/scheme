@@ -27,10 +27,18 @@ test('public site motion and film controls in a browser', {
     } catch { response.writeHead(404).end(); }
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  t.after(() => new Promise(resolve => server.close(resolve)));
-  const browser = await chromium.launch({ headless: true,
+  let browser;
+  t.after(async () => {
+    try { await browser?.close(); }
+    finally {
+      await new Promise(resolve => {
+        server.close(resolve);
+        server.closeAllConnections();
+      });
+    }
+  });
+  browser = await chromium.launch({ headless: true,
     ...(process.env.SCHEME_CHROMIUM_EXECUTABLE ? { executablePath: process.env.SCHEME_CHROMIUM_EXECUTABLE } : {}) });
-  t.after(() => browser.close());
   const base = `http://127.0.0.1:${server.address().port}`;
   async function open(options = {}) {
     const page = await browser.newPage({ viewport: { width: 1360, height: 900 }, ...options });

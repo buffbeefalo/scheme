@@ -244,10 +244,10 @@ test('a complete event missing only its newline cannot duplicate the next sequen
   assert.deepEqual(journal.records.map((item) => item.seq), [1, 2, 3]);
 });
 
-test('simultaneous journal processes allocate distinct consecutive sequences', { timeout: 10_000 }, async (t) => {
+test('simultaneous journal processes preserve consecutive sequences across bounded contention', { timeout: 10_000 }, async (t) => {
   const dir = scratch(t);
   const file = journalPath(dir, identity);
-  appendHookRecord(file, record());
+  assert.deepEqual(appendHookRecord(file, record()), { ok: true });
   const script = `
     const { appendHookRecord } = require(process.argv[1]);
     process.stdout.write('ready\\n');
@@ -256,12 +256,14 @@ test('simultaneous journal processes allocate distinct consecutive sequences', {
     });
   `;
   const workers = Array.from({ length: 6 }, (_, index) => {
+    const input = record({ seq: undefined, kind: 'read', filePath: `/tmp/worker-${index}` });
     const child = spawn(process.execPath, ['-e', script, require.resolve('../lib/codex-hook-journal'), file,
-      JSON.stringify(record({ seq: undefined, kind: 'read', filePath: `/tmp/worker-${index}` }))], {
+      JSON.stringify(input)], {
       env: { ...process.env, HOME: dir }, stdio: ['pipe', 'pipe', 'pipe'],
     });
     t.after(() => child.kill());
     let output = '';
+    let errors = '';
     let resolveReady;
     let rejectReady;
     const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
@@ -270,20 +272,40 @@ test('simultaneous journal processes allocate distinct consecutive sequences', {
         output += String(chunk);
         if (output.includes('ready\n')) resolveReady();
       });
+      child.stderr.on('data', (chunk) => { errors += String(chunk); });
       child.once('error', (error) => { rejectReady(error); reject(error); });
-      child.once('exit', (code) => {
-        if (!output.includes('ready\n')) rejectReady(new Error(`writer exited: ${code}`));
-        if (code !== 0) return reject(new Error(`writer failed: ${code}`));
-        try { resolve(JSON.parse(output.trim().split('\n').at(-1))); }
+      child.once('close', (code) => {
+        if (!output.includes('ready\n')) rejectReady(new Error(`writer exited: ${code} ${errors}`));
+        if (code !== 0) return reject(new Error(`writer failed: ${code} ${errors}`));
+        try { resolve({ result: JSON.parse(output.trim().split('\n').at(-1)), errors }); }
         catch (error) { reject(error); }
       });
     });
-    return { child, ready, done };
+    return { child, ready, done, input };
   });
   await Promise.all(workers.map((worker) => worker.ready));
   for (const worker of workers) worker.child.stdin.end('go');
   const results = await Promise.all(workers.map((worker) => worker.done));
-  assert.equal(results.every((result) => result.ok), true);
+  const accepted = workers.filter((_, index) => results[index].result.ok);
+  assert.ok(accepted.length > 0, 'at least one simultaneous writer must acquire the lock');
+  const firstWave = readHookJournal(file, identity);
+  assert.equal(firstWave.valid, true);
+  assert.deepEqual(firstWave.records.map((item) => item.seq), Array.from({ length: accepted.length + 1 }, (_, i) => i + 1));
+  assert.deepEqual(firstWave.records.slice(1).map((item) => item.filePath).sort(), accepted.map((worker) => worker.input.filePath).sort(),
+    'only successful attempts may append, with no missing or duplicate records');
+  for (const [index, { result, errors }] of results.entries()) {
+    if (result.ok) {
+      assert.deepEqual(result, { ok: true });
+      assert.equal(errors, '');
+      continue;
+    }
+    // Advisory writes have a bounded wait. Slow CI may exhaust it; retry only
+    // that documented refusal, after proving the failed attempt wrote nothing.
+    assert.deepEqual(result, { ok: false });
+    assert.equal(errors.trim(), '[command-deck] registry lock timed out after 500ms');
+    assert.deepEqual(appendHookRecord(file, workers[index].input), { ok: true });
+    t.diagnostic(`worker ${index} completed after its bounded contention refusal`);
+  }
   const journal = readHookJournal(file, identity);
   assert.equal(journal.valid, true);
   assert.deepEqual(journal.records.map((item) => item.seq), [1, 2, 3, 4, 5, 6, 7]);

@@ -368,7 +368,8 @@ window.CommandDeckWorkspace = {
       if (returnFocus) restoreFocus(opener);
       viewport(); requestAnimationFrame(refit);
     }
-    phoneMedia.addEventListener('change', syncPresentation);
+    if (typeof phoneMedia.addEventListener === 'function') phoneMedia.addEventListener('change', syncPresentation);
+    else if (typeof phoneMedia.addListener === 'function') phoneMedia.addListener(syncPresentation);
     window.visualViewport?.addEventListener('resize', viewport);
     window.visualViewport?.addEventListener('scroll', viewport);
     addEventListener('resize', viewport);

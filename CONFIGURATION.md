@@ -88,6 +88,12 @@ On narrow touch layouts, each session’s Write draft uses the current browser t
 
 Scheme saves its registry, notes, audit log, and browser-link shim under `~/.claude/command-deck/`. Agent sign-ins and conversation files use the agents' own configuration directories. Uploads go into a `.cc-uploads` folder **inside the session's project**.
 
+Saved-tab changes stop if the registry cannot be read or validated. They do not replace unreadable data with an empty list. A failed save is reported; keep the existing file while resolving the storage problem.
+
+Runtime switches serialize Scheme's changes to the same settings file and preserve unrelated preferences. Repeatedly switching plugins off keeps the original saved mix; failed restores retain it for a later retry. Unreadable settings or plugin backups are refused. Other programs editing that file do not participate in Scheme's lock: detected changes are refused, but a simultaneous external edit can still race the final replacement.
+
+The audit history is limited to 1 MiB and new files use owner-only permissions. Response text is omitted, including when older entries are displayed; older on-disk entries are retained until normal trimming removes them. Recent-history requests read a bounded tail asynchronously. Audit failure is logged and does not undo an action that already happened. A tunnel's loopback address is connection information, not proof of a person's identity.
+
 The browser-link helper may also create its own marked `xdg-open` script under `~/.local/bin/`; it relays links from Scheme sessions and otherwise calls the system opener. It does not overwrite an unrelated file already there.
 
 Keep your projects, agent settings, uploads, transcripts, and logs outside the Scheme source/release folder. Do not include them when sharing a ZIP or bug report.

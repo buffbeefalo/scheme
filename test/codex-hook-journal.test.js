@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawn, spawnSync } = require('node:child_process');
 
 const {
   JOURNAL_MAX_BYTES, appendHookRecord, journalPath, readHookJournal,
@@ -34,6 +35,35 @@ function scratch(t) {
   return dir;
 }
 
+// Stop a real writer after it acquired the journal lock, at the boundary where
+// it would append. A crash leaves the actual production lock for the next writer.
+const interruptedWriter = `
+  const fs = require('node:fs');
+  const journal = require(process.argv[1]);
+  const append = fs.appendFileSync;
+  fs.appendFileSync = (...args) => {
+    process.stdout.write('locked\\n');
+    if (process.argv[4] === 'crash') process.exit(71);
+    if (process.argv[4] === 'torn-crash') {
+      append(args[0], Buffer.from(args[1]).subarray(0, 32), args[2]);
+      process.exit(71);
+    }
+    const wait = new Int32Array(new SharedArrayBuffer(4));
+    const deadline = Date.now() + 10_000;
+    while (!fs.existsSync(process.argv[4])) {
+      if (Date.now() > deadline) process.exit(72);
+      Atomics.wait(wait, 0, 0, 10);
+    }
+    return append(...args);
+  };
+  process.stdout.write(JSON.stringify(journal.appendHookRecord(process.argv[2], JSON.parse(process.argv[3]))));
+`;
+
+function writerArgs(file, action) {
+  return ['-e', interruptedWriter, require.resolve('../lib/codex-hook-journal'), file,
+    JSON.stringify(record({ seq: undefined, kind: 'tool_start', toolCallId: 'interrupted' })), action];
+}
+
 test('writer round-trips an allowlisted record and strips arbitrary payload fields', (t) => {
   const dir = scratch(t);
   const file = journalPath(dir, identity);
@@ -43,6 +73,221 @@ test('writer round-trips an allowlisted record and strips arbitrary payload fiel
   const journal = readHookJournal(file, identity);
   assert.equal(journal.valid, true);
   assert.equal(journal.records[0].question, 'Proceed?');
+});
+
+test('writer recovers the lock of a crashed process and continues the sequence', (t) => {
+  const dir = scratch(t);
+  const file = journalPath(dir, identity);
+  assert.deepEqual(appendHookRecord(file, record()), { ok: true });
+  const child = spawnSync(process.execPath, writerArgs(file, 'crash'), {
+    env: { ...process.env, HOME: dir }, encoding: 'utf8', timeout: 5000,
+  });
+  assert.equal(child.status, 71, child.stderr);
+  assert.equal(fs.existsSync(`${file}.lock`), true, 'crash must leave a lock to recover');
+
+  assert.deepEqual(appendHookRecord(file, record({ seq: undefined, kind: 'tool_end' })), { ok: true });
+  const journal = readHookJournal(file, identity);
+  assert.equal(journal.valid, true);
+  assert.deepEqual(journal.records.map((item) => item.seq), [1, 2]);
+  assert.equal(fs.existsSync(`${file}.lock`), false);
+});
+
+test('writer cannot take the lock of a live process', { timeout: 15_000 }, async (t) => {
+  const dir = scratch(t);
+  const file = journalPath(dir, identity);
+  const release = path.join(dir, 'release-writer');
+  assert.deepEqual(appendHookRecord(file, record()), { ok: true });
+  const child = spawn(process.execPath, writerArgs(file, release), {
+    env: { ...process.env, HOME: dir }, stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  t.after(() => child.kill());
+  let output = '';
+  let errors = '';
+  let locked;
+  let failed;
+  const ready = new Promise((resolve, reject) => { locked = resolve; failed = reject; });
+  const done = new Promise((resolve, reject) => {
+    child.stdout.on('data', (chunk) => {
+      output += String(chunk);
+      if (output.includes('locked\n')) locked();
+    });
+    child.stderr.on('data', (chunk) => { errors += String(chunk); });
+    child.once('error', (error) => { failed(error); reject(error); });
+    child.once('exit', (code) => {
+      if (!output.includes('locked\n')) failed(new Error(`writer exited before acquiring lock: ${code} ${errors}`));
+      resolve(code);
+    });
+  });
+  await ready;
+  const before = fs.readFileSync(file, 'utf8');
+  const lockBefore = fs.readFileSync(`${file}.lock`, 'utf8');
+  let result;
+  try {
+    result = appendHookRecord(file, record({ seq: undefined, kind: 'tool_end' }));
+    assert.equal(fs.readFileSync(file, 'utf8'), before);
+    assert.equal(fs.readFileSync(`${file}.lock`, 'utf8'), lockBefore);
+  } finally {
+    fs.writeFileSync(release, 'release');
+  }
+  assert.equal(await done, 0, errors);
+  assert.deepEqual(result, { ok: false });
+  assert.deepEqual(readHookJournal(file, identity).records.map((item) => item.seq), [1, 2]);
+});
+
+test('writer retains an old lock when its owner cannot be identified', (t) => {
+  const dir = scratch(t);
+  const file = journalPath(dir, identity);
+  assert.deepEqual(appendHookRecord(file, record()), { ok: true });
+  const before = fs.readFileSync(file, 'utf8');
+  fs.writeFileSync(`${file}.lock`, '');
+  const old = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  fs.utimesSync(`${file}.lock`, old, old);
+
+  assert.deepEqual(appendHookRecord(file, record({ seq: undefined, kind: 'tool_end' })), { ok: false });
+  assert.equal(fs.readFileSync(file, 'utf8'), before);
+  assert.equal(fs.readFileSync(`${file}.lock`, 'utf8'), '');
+});
+
+test('writer cleanup preserves a lock replaced by another owner', (t) => {
+  const dir = scratch(t);
+  const file = journalPath(dir, identity);
+  const append = fs.appendFileSync;
+  t.mock.method(fs, 'appendFileSync', (target, ...args) => {
+    const result = append(target, ...args);
+    if (target === file) fs.writeFileSync(`${file}.lock`, 'replacement-owner');
+    return result;
+  });
+
+  appendHookRecord(file, record());
+  assert.equal(fs.existsSync(`${file}.lock`), true, 'cleanup must not delete a replacement owner');
+  assert.equal(fs.readFileSync(`${file}.lock`, 'utf8'), 'replacement-owner');
+});
+
+test('writer separates a torn tail and continues after the last valid complete record', (t) => {
+  const dir = scratch(t);
+  const file = journalPath(dir, identity);
+  assert.deepEqual(appendHookRecord(file, record()), { ok: true });
+  const damaged = fs.readFileSync(file, 'utf8') + '{"v":1,"seq":999,"kind":"tool_';
+  fs.writeFileSync(file, damaged);
+
+  assert.deepEqual(appendHookRecord(file, record({ seq: undefined, kind: 'read', filePath: '/tmp/recovered' })), { ok: true });
+  assert.ok(fs.readFileSync(file, 'utf8').startsWith(`${damaged}\n`), 'preserve damaged bytes behind a newline boundary');
+  const journal = readHookJournal(file, identity);
+  assert.equal(journal.valid, true);
+  assert.equal(journal.partial, true);
+  assert.match(journal.warnings.join(' '), /partial|gap|torn/i);
+  assert.deepEqual(journal.records.map((item) => item.seq), [1, 2]);
+  assert.equal(journal.records[1].filePath, '/tmp/recovered');
+});
+
+test('reader salvages a valid prefix before an unfinished record without inventing a completed plan', (t) => {
+  const dir = scratch(t);
+  const file = journalPath(dir, identity);
+  appendHookRecord(file, record());
+  appendHookRecord(file, record({ seq: 2, kind: 'plan', plan: [{ step: 'Inspect', status: 'in_progress' }] }));
+  fs.appendFileSync(file, '{"v":1,"seq":3,"kind":"stop"');
+  const journal = readHookJournal(file, identity);
+  assert.equal(journal.valid, true);
+  assert.equal(journal.partial, true);
+  assert.deepEqual(journal.records.map((item) => item.seq), [1, 2]);
+  const hook = reconstructHookTelemetry(journal);
+  assert.equal(hook.tasks[0].status, 'in_progress');
+  assert.equal(hook.telemetryMeta.fields.tasks.completeness, 'partial');
+  const merged = mergeCodexTelemetry(analyzeCodexRollout([]), journal, identity);
+  assert.equal(merged.working, null);
+  assert.equal(merged.waitingOnBackground, null);
+  assert.ok(merged.telemetryMeta.warnings.length > 0);
+});
+
+test('writer recovers both a dead owner and its partial append without losing later records', (t) => {
+  const dir = scratch(t);
+  const file = journalPath(dir, identity);
+  appendHookRecord(file, record());
+  const child = spawnSync(process.execPath, writerArgs(file, 'torn-crash'), {
+    env: { ...process.env, HOME: dir }, encoding: 'utf8', timeout: 5000,
+  });
+  assert.equal(child.status, 71, child.stderr);
+  const damaged = fs.readFileSync(file, 'utf8');
+  assert.equal(damaged.endsWith('\n'), false);
+  assert.deepEqual(appendHookRecord(file, record({ seq: undefined, kind: 'tool_end' })), { ok: true });
+  assert.ok(fs.readFileSync(file, 'utf8').startsWith(`${damaged}\n`));
+  const journal = readHookJournal(file, identity);
+  assert.equal(journal.valid, true);
+  assert.equal(journal.partial, true);
+  assert.deepEqual(journal.records.map((item) => item.seq), [1, 2]);
+});
+
+test('journal read failures do not reset sequence or append over unreadable history', (t) => {
+  const dir = scratch(t);
+  const file = journalPath(dir, identity);
+  appendHookRecord(file, record());
+  const before = fs.readFileSync(file, 'utf8');
+  const read = fs.readFileSync;
+  const mock = t.mock.method(fs, 'readFileSync', (target, ...args) => {
+    if (target === file) throw Object.assign(new Error('journal unreadable'), { code: 'EIO' });
+    return read(target, ...args);
+  });
+  const result = appendHookRecord(file, record({ seq: undefined, kind: 'stop' }));
+  mock.mock.restore();
+  assert.deepEqual(result, { ok: false });
+  assert.equal(fs.readFileSync(file, 'utf8'), before);
+});
+
+test('a complete event missing only its newline cannot duplicate the next sequence', (t) => {
+  const dir = scratch(t);
+  const file = journalPath(dir, identity);
+  appendHookRecord(file, record());
+  fs.appendFileSync(file, JSON.stringify(record({ seq: 2, kind: 'read', filePath: '/tmp/before' })));
+  assert.deepEqual(appendHookRecord(file, record({ seq: undefined, kind: 'read', filePath: '/tmp/after' })), { ok: true });
+  const journal = readHookJournal(file, identity);
+  assert.equal(journal.valid, true);
+  assert.deepEqual(journal.records.map((item) => item.seq), [1, 2, 3]);
+});
+
+test('simultaneous journal processes allocate distinct consecutive sequences', { timeout: 10_000 }, async (t) => {
+  const dir = scratch(t);
+  const file = journalPath(dir, identity);
+  appendHookRecord(file, record());
+  const script = `
+    const { appendHookRecord } = require(process.argv[1]);
+    process.stdout.write('ready\\n');
+    process.stdin.once('data', () => {
+      process.stdout.write(JSON.stringify(appendHookRecord(process.argv[2], JSON.parse(process.argv[3]))));
+    });
+  `;
+  const workers = Array.from({ length: 6 }, (_, index) => {
+    const child = spawn(process.execPath, ['-e', script, require.resolve('../lib/codex-hook-journal'), file,
+      JSON.stringify(record({ seq: undefined, kind: 'read', filePath: `/tmp/worker-${index}` }))], {
+      env: { ...process.env, HOME: dir }, stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    t.after(() => child.kill());
+    let output = '';
+    let resolveReady;
+    let rejectReady;
+    const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+    const done = new Promise((resolve, reject) => {
+      child.stdout.on('data', (chunk) => {
+        output += String(chunk);
+        if (output.includes('ready\n')) resolveReady();
+      });
+      child.once('error', (error) => { rejectReady(error); reject(error); });
+      child.once('exit', (code) => {
+        if (!output.includes('ready\n')) rejectReady(new Error(`writer exited: ${code}`));
+        if (code !== 0) return reject(new Error(`writer failed: ${code}`));
+        try { resolve(JSON.parse(output.trim().split('\n').at(-1))); }
+        catch (error) { reject(error); }
+      });
+    });
+    return { child, ready, done };
+  });
+  await Promise.all(workers.map((worker) => worker.ready));
+  for (const worker of workers) worker.child.stdin.end('go');
+  const results = await Promise.all(workers.map((worker) => worker.done));
+  assert.equal(results.every((result) => result.ok), true);
+  const journal = readHookJournal(file, identity);
+  assert.equal(journal.valid, true);
+  assert.deepEqual(journal.records.map((item) => item.seq), [1, 2, 3, 4, 5, 6, 7]);
+  assert.equal(new Set(journal.records.slice(1).map((item) => item.filePath)).size, 6);
 });
 
 test('writer stays within one MiB and emits one overflow record', (t) => {

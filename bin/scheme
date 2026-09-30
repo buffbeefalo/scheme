@@ -19,11 +19,17 @@ for arg in "$@"; do
 done
 while [ $# -gt 0 ]; do
   case "$1" in
-    --port) PORT="$2"; shift 2 ;;
+    --port)
+      if [ $# -lt 2 ] || [[ "$2" == --* ]]; then echo 'scheme: --port requires a number (0–65535)' >&2; exit 2; fi
+      PORT="$2"; shift 2 ;;
     --port=*) PORT="${1#--port=}"; shift ;;
     *) echo "scheme: unknown argument '$1' (try --help)" >&2; exit 2 ;;
   esac
 done
+
+if ! [[ "$PORT" =~ ^[0-9]{1,5}$ ]] || [ "$((10#$PORT))" -gt 65535 ]; then
+  echo 'scheme: --port requires a number (0–65535)' >&2; exit 2
+fi
 
 need() { command -v "$1" >/dev/null 2>&1 || { echo "scheme: '$1' is required but not installed — see INSTALL-HOST.md" >&2; exit 1; }; }
 need node; need tmux; need script

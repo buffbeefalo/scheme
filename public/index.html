@@ -1339,8 +1339,8 @@
 <script src="/vendor/xterm.js"></script>
 <script src="/vendor/addon-fit.js"></script>
 <script src="/vendor/addon-search.js"></script>
-<script src="/vendor/terminal-workspace.js"></script>
-<script src="/vendor/terminal-ui.js?v=portable-workspace1"></script>
+<script src="/vendor/terminal-workspace.js?v=reported-fixes-20260929"></script>
+<script src="/vendor/terminal-ui.js?v=reported-fixes-20260929"></script>
 <script>
 'use strict';
 const $=(id)=>document.getElementById(id);
@@ -1459,9 +1459,16 @@ function renderOpenUrls(list){
 
 // ---- "needs your input": title badge, favicon swap and the answer bar (any tab) ----
 const BASE_TITLE=document.title;
-let attnCount=-1, _needSig='';
-function applyAttention(map){
-  const m=(map&&typeof map==='object')?map:{};
+let attnCount=-1, _needSig='', lastAttention=Object.create(null);
+function applyAttention(map,lights){
+  if(!map||typeof map!=='object'||Array.isArray(map))return;
+  if(Object.keys(map).some(id=>typeof map[id]!=='string'))return;
+  const m=Object.assign(Object.create(null),map);
+  // A failed per-session transcript read proves nothing about an unanswered prompt.
+  if(lights&&typeof lights==='object'&&!Array.isArray(lights)){
+    for(const id of Object.keys(lastAttention))if(lights[id]&&lights[id].err===true)m[id]=lastAttention[id];
+  }
+  lastAttention=m;
   const ids=Object.keys(m), n=ids.length;
   if(n!==attnCount){
     attnCount=n;
@@ -1527,7 +1534,11 @@ function connect(){
   const es=new EventSource('/events');
   es.onopen=()=>{lastMsg=Date.now();setOffline(false);};
   es.onmessage=(e)=>{lastMsg=Date.now();setOffline(false);
-    try{const d=JSON.parse(e.data); if(d.hb&&!d.ts) return; applyAttention(d.termAttention); if(Object.hasOwn(d,'termLights')&&window.CommandDeckTerminal&&window.CommandDeckTerminal.lights)window.CommandDeckTerminal.lights(d.termLights); render(d);}catch(err){console.error(err);}};
+    try{const d=JSON.parse(e.data); if(d.hb&&!d.ts) return;
+      if(Object.prototype.hasOwnProperty.call(d,'termAttention'))applyAttention(d.termAttention,d.termLights);
+      if(Object.prototype.hasOwnProperty.call(d,'termLights')&&window.CommandDeckTerminal&&window.CommandDeckTerminal.lights)window.CommandDeckTerminal.lights(d.termLights);
+      render(d);
+    }catch(err){console.error(err);}};
   es.onerror=()=>{setOffline(true); if(es.readyState===EventSource.CLOSED){try{es.close();}catch(_){} setTimeout(connect,1500);}};
 }
 connect();

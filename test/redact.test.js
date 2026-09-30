@@ -35,6 +35,73 @@ test('redacts private keys, URL credentials, and known token shapes', () => {
   assert.doesNotMatch(redacted, /not-real-key-material|user:pass|glpat-abcdefghijklmnopqrstuvwxyz|ghp_abcdefghijklmnopqrstuvwxyz/);
 });
 
+test('redacts the whole URL password when it contains a raw slash', () => {
+  const raw = 'connecting "https://reader:alpha/beta@gateway.example:8443/logs?view=all" done';
+  const redacted = redactSensitiveText(raw);
+
+  assert.equal(redacted, 'connecting "https://[REDACTED]@gateway.example:8443/logs?view=all" done');
+  assert.doesNotMatch(redacted, /reader|alpha|beta/);
+});
+
+test('redacts the whole URL password when it contains multiple at-signs', () => {
+  const raw = 'connecting https://reader:alpha@beta@gamma@gateway.example/logs done';
+  const redacted = redactSensitiveText(raw);
+
+  assert.equal(redacted, 'connecting https://[REDACTED]@gateway.example/logs done');
+  assert.doesNotMatch(redacted, /reader|alpha|beta|gamma/);
+});
+
+test('redacts URL credentials containing both raw slashes and at-signs', () => {
+  const raw = 'connecting postgres://reader:alpha/beta@gamma/delta@database.example/db done';
+  const redacted = redactSensitiveText(raw);
+
+  assert.equal(redacted, 'connecting postgres://[REDACTED]@database.example/db done');
+  assert.doesNotMatch(redacted, /reader|alpha|beta|gamma|delta/);
+});
+
+test('redacts URL passwords with an empty username or an at-sign in the username', () => {
+  for (const raw of ['https://:alpha/beta@host.example/path', 'https://reader@example:alpha/beta@host.example/path']) {
+    assert.equal(redactSensitiveText(raw), 'https://[REDACTED]@host.example/path');
+  }
+});
+
+test('ordinary URLs keep their host, port, IPv6 address, and path punctuation', () => {
+  const raw = [
+    'https://example.com/path?view=all',
+    'https://example.com:8443/path',
+    'http://[2001:db8::1]:3000/path',
+    'https://example.com/team/alice@work',
+    'https://example.com/path?next=alpha:beta@gamma',
+    'file:///tmp/a:b@example.txt',
+  ].join('\n');
+
+  assert.equal(redactSensitiveText(raw), raw);
+});
+
+test('an oversized URL is removed completely without retaining a credential suffix', () => {
+  const raw = 'before https://reader:' + 'a/'.repeat(65536) + 'secret-end@host.example/path after';
+  const redacted = redactSensitiveText(raw);
+  const expected = 'before https://[REDACTED] after';
+
+  assert.equal(redacted.length, expected.length, 'the whole oversized URL must be removed');
+  assert.equal(redacted, expected);
+});
+
+test('an oversized URL is removed even when its final at-sign is far from an earlier one', () => {
+  const raw = 'before https://reader:alpha@' + 'a/'.repeat(65536) + 'secret-end@host.example/path after';
+  const redacted = redactSensitiveText(raw);
+  const expected = 'before https://[REDACTED] after';
+
+  assert.equal(redacted.length, expected.length, 'redacting an early prefix must not expose the remaining password');
+  assert.equal(redacted, expected);
+});
+
+test('URL credential redaction is idempotent', () => {
+  const once = redactSensitiveText('https://reader:alpha/beta@gamma@host.example:8443/path');
+
+  assert.equal(redactSensitiveText(once), once);
+});
+
 test('redacts Discord, OpenAI, JWT, and unknown high-entropy token families', () => {
   const discord = 'M' + 'a'.repeat(24) + '.' + 'b'.repeat(6) + '.' + 'c'.repeat(25);
   const mfa = 'mfa.' + 'd'.repeat(24);

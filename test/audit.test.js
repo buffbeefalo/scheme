@@ -74,3 +74,47 @@ test('readRecent skips corrupt lines instead of throwing', () => {
     assert.equal(rows[0].action, 'good2');
   } finally { try { fs.unlinkSync(file); } catch {} }
 });
+
+
+test('audit files are private and response text is never retained', () => {
+  const file=tmpFile();
+  try {
+    assert.equal(audit.appendEntry({action:'term:respond',target:'cdone',detail:'password=fixture-secret'}, {file}),true);
+    const raw=fs.readFileSync(file,'utf8');
+    assert.doesNotMatch(raw,/fixture-secret/);
+    assert.equal(fs.statSync(file).mode & 0o777,0o600);
+  } finally { fs.rmSync(file,{force:true}); }
+});
+test('audit redacts other fields before truncating them', () => {
+  const e=audit.formatEntry({action:'other',target:'https://u:private-password@host',detail:'password=fixture-secret'});
+  assert.doesNotMatch(JSON.stringify(e),/private-password|fixture-secret/);
+});
+test('audit growth and reads stay bounded even with an oversized existing log', t => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'scheme-audit-bounds-'));
+  const file=path.join(dir,'audit.jsonl');
+  t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  fs.writeFileSync(file,(JSON.stringify({action:'old',detail:'x'.repeat(500)})+'\n').repeat(10000));
+  assert.equal(audit.appendEntry({action:'newest'}, {file}),true);
+  const total=fs.readdirSync(dir).reduce((sum,name)=>sum+fs.statSync(path.join(dir,name)).size,0);
+  assert.ok(total<=2*1024*1024,'bounded retained history');
+  const read=fs.readFileSync;
+  t.mock.method(fs,'readFileSync',(p,...args)=>{assert.notEqual(String(p),file,'no full synchronous log read');return read(p,...args);});
+  const rows=audit.readRecent(1,{file}); assert.equal(rows[0]?.action,'newest');
+});
+
+
+test('asynchronous audit read returns bounded recent history', async t => {
+  const file=tmpFile();t.after(()=>fs.rmSync(file,{force:true}));
+  fs.writeFileSync(file,'{"action":"older"}\n{"action":"newer"}\n');
+  const read=fs.readFileSync;
+  t.mock.method(fs,'readFileSync',(p,...args)=>{assert.notEqual(String(p),file);return read(p,...args);});
+  assert.deepEqual((await audit.readRecentAsync(1,{file})).map(r=>r.action),['newer']);
+});
+
+test('reading legacy audit entries never returns old response previews or credentials', () => {
+  const file=tmpFile();
+  try {
+    fs.writeFileSync(file,JSON.stringify({action:'term:respond',detail:'legacy private response'})+'\n'+JSON.stringify({action:'other',detail:'password=old-password'})+'\n');
+    assert.doesNotMatch(JSON.stringify(audit.readRecent(10,{file})),/legacy private response|old-password/);
+  } finally {fs.rmSync(file,{force:true});}
+});

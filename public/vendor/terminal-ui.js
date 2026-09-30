@@ -28,7 +28,7 @@
     try {
       const r = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
       const j = await r.json().catch(() => ({}));
-      return { ...j, _status: r.status };
+      return { ...j, ok: r.ok && !!j && j.ok === true, _status: r.status };
     } catch (e) { return { ok: false, _status: 0, error: e.message }; }
   }
 
@@ -114,6 +114,9 @@
   const rtOf = (s) => s.local ? 'local' : s.codex ? 'codex' : s.shell ? 'shell' : 'claude';
 
   const S = new Map();
+  const missingSessions = new Map();
+  let sessionRevision = 0, sessionsStale = false;
+  let stopSelectionScroll = () => {}, cancelKeybarTap = () => {};
   let active = null, booted = false, els = {}, screenRO = null, dragged = null, dragPaintQueued = false, creatingSession = false, launchCommitted = false;
   let scrollDrag = false, lastHist = 0, scrollPoll = null, lastGoto = 0, pendingWheel = 0, wheelRaf = null, scrollPostInFlight = false, lastPos = 0, telPoll = null, scrollInFlight = false, telInFlight = false, telQueued = false, telTick = 0;
   let usagePoll = null, usageInFlight = false, lastAccountUsage = null, usageUpdateFailed = false;
@@ -129,10 +132,12 @@
     fontSizes.desktop = Math.min(22, Math.max(8, Number(localStorage.getItem('cd-font')) || 13));
   } catch (_) {}
   let fontSize = fontSizes[phoneLayout.matches ? 'phone' : 'desktop'], workspace = null;
-  phoneLayout.addEventListener('change', () => {
+  const fontLayoutChanged = () => {
     fontSize = fontSizes[phoneLayout.matches ? 'phone' : 'desktop'];
     applyFont();
-  });
+  };
+  if (typeof phoneLayout.addEventListener === 'function') phoneLayout.addEventListener('change', fontLayoutChanged);
+  else if (typeof phoneLayout.addListener === 'function') phoneLayout.addListener(fontLayoutChanged);
 
   function cache() {
     els = {
@@ -199,9 +204,10 @@
     if (window.ResizeObserver && !screenRO) {
       let t; screenRO = new ResizeObserver(() => { clearTimeout(t); t = setTimeout(refit, 50); }); screenRO.observe(els.host);
     }
-    renderSessions(r.sessions || []);
+    const list = validSessionList(r) ? r.sessions : [];
+    sessionsStale = !validSessionList(r);
+    if (!sessionsStale) renderSessions(list, false);
     await loadProjects();
-    const list = r.sessions || [];
     // Re-open the tab you were actually on before the refresh, not always tab #1.
     let pick = null; try { const a = localStorage.getItem('cd-active'); if (a && list.some((s) => s.id === a)) pick = a; } catch (_) {}
     if (list.length) setActive(pick || list[0].id); else els.empty.style.display = 'flex';
@@ -214,10 +220,25 @@
 
   // ── sessions ────────────────────────────────────────────────────────────────────
   // Register meta only; the heavy xterm+socket is built lazily on first activate (below).
-  function renderSessions(list) {
+  function validSessionList(response) {
+    if (!response.ok || !Array.isArray(response.sessions)) return false;
+    const ids = new Set();
+    return response.sessions.every(meta => {
+      if (!meta || typeof meta.id !== 'string' || !meta.id.trim() || ids.has(meta.id)) return false;
+      ids.add(meta.id); return true;
+    });
+  }
+  function renderSessions(list, select = true) {
     const known = new Set(list.map((s) => s.id));
-    for (const id of [...S.keys()]) if (!known.has(id)) destroy(id);
     for (const meta of list) { const s = S.get(meta.id); if (s) { s.name = meta.name; s.cwd = meta.cwd; s.local = !!meta.local; s.localModel = meta.localModel || null; s.codex = !!meta.codex; s.codexModel = meta.codexModel || null; s.shell = !!meta.shell; s.createdAt = meta.createdAt || s.createdAt || null; } else register(meta); }
+    // One successful omission can still be a transient snapshot. Only consecutive
+    // successful omissions confirm closure; failures clear this bounded per-tab count.
+    for (const id of [...S.keys()]) {
+      if (known.has(id)) { missingSessions.delete(id); continue; }
+      const misses = (missingSessions.get(id) || 0) + 1;
+      if (misses >= 2) destroy(id, true); else missingSessions.set(id, misses);
+    }
+    if (select && (!active || !S.has(active))) setActive(S.keys().next().value || null);
     if (lastLightsMap) applyLightsMap(lastLightsMap);   // replay the latest SSE lights over just-registered tabs (spec R2-F12)
     paint();
   }
@@ -230,7 +251,7 @@
     const seen = loadSeen()[meta.id] || null;
     const s = { id: meta.id, name: meta.name || meta.id, cwd: meta.cwd || '', createdAt: meta.createdAt || null, local: !!meta.local, localModel: meta.localModel || null, codex: !!meta.codex, codexModel: meta.codexModel || null, shell: !!meta.shell, term: null, fit: null, ws: null, pending: null, el: null, opened: false, status: 'live', userClosed: false, lastTurnId: null, seenTurnId: seen, seenInit: !!seen, working: false, lifecycleKnown: false, attn: false, needsInput: false, needsInputKind: null, waiting: false, lightsErr: false, telemetryUnknown: false,
       stateSince: null, lastActivity: null, contextTokens: null, contextWindow: null, modelShort: null, ask: null, where: null, lastAction: null, lastActionAt: null, task: null };
-    S.set(meta.id, s); return s;
+    S.set(meta.id, s); sessionRevision++; return s;
   }
   // ── identity ────────────────────────────────────────────────────────────────
   // Sessions can share both a label and a working directory, so neither field alone identifies them
@@ -382,12 +403,12 @@
     });
     if (els.countN) els.countN.textContent = String(pills.length);
     // The word is dropped on phone widths (CSS), where those ~70px are worth more as session pills.
-    if (els.countOff) els.countOff.innerHTML = offscreen.length
+    if (els.countOff) els.countOff.innerHTML = sessionsStale ? ' · retrying' : offscreen.length
       ? ` · ${offscreen.length}<span class="ow"> off-screen</span>` : '';
     if (els.countBtn) {
-      els.countBtn.setAttribute('aria-label', offscreen.length
+      els.countBtn.setAttribute('aria-label', (offscreen.length
         ? `All ${pills.length} sessions — ${offscreen.length} off-screen`
-        : `All ${pills.length} sessions`);
+        : `All ${pills.length} sessions`) + (sessionsStale ? ' — session list unavailable; keeping tabs and retrying' : ''));
       // Worst state among the pills you CANNOT see, so a hidden session asking for you still shows.
       let agg = '';
       for (const p of offscreen) {
@@ -634,15 +655,15 @@
   // native terminal on the box opens them). findUrlLinks maps a logical (possibly wrapped) line's
   // URL matches back to xterm 1-based cell ranges; wireLinks registers them on a terminal.
   function openUrl(u) { try { window.open(u, '_blank', 'noopener,noreferrer'); } catch (_) {} }
-  function findUrlLinks(text, cols, startRow) {
+  function findUrlLinks(text, cols, startRow, cells) {
     const out = []; const re = /https?:\/\/\S+/g; let m;
     while ((m = re.exec(text))) {
       const url = m[0].replace(/[)\].,;:!?'"]+$/, '');                 // drop trailing punctuation
       if (url.length < 8) continue;
       const so = m.index, eo = m.index + url.length - 1;
       out.push({ text: url, range: {
-        start: { x: (so % cols) + 1, y: startRow + Math.floor(so / cols) + 1 },
-        end:   { x: (eo % cols) + 1, y: startRow + Math.floor(eo / cols) + 1 } } });
+        start: cells ? cells[so].start : { x: (so % cols) + 1, y: startRow + Math.floor(so / cols) + 1 },
+        end:   cells ? cells[eo].end : { x: (eo % cols) + 1, y: startRow + Math.floor(eo / cols) + 1 } } });
     }
     return out;
   }
@@ -652,9 +673,28 @@
         const buf = term.buffer.active, cols = term.cols;
         let start = y - 1;                                              // 0-based; walk up to the logical line start
         while (start > 0) { const ln = buf.getLine(start); if (ln && ln.isWrapped) start--; else break; }
-        let text = '', row = start;                                     // rebuild the full (unwrapped) logical line
-        for (;;) { const ln = buf.getLine(row); if (!ln) break; text += ln.translateToString(false); const nx = buf.getLine(row + 1); if (nx && nx.isWrapped) row++; else break; }
-        const links = findUrlLinks(text, cols, start).map((l) => ({ text: l.text, range: l.range, activate(_e, t) { openUrl(t); }, hover() {}, leave() {} }));
+        let text = '', row = start;
+        const cells = [];
+        for (;;) {
+          const line = buf.getLine(row); if (!line) break;
+          const next = buf.getLine(row + 1), wraps = next && next.isWrapped;
+          for (let col = 0; col < cols; col++) {
+            const cell = line.getCell(col); if (!cell || cell.getWidth() === 0) continue;
+            const chars = cell.getChars();
+            // A double-width glyph can leave one unused cell at the wrap edge.
+            // That structural padding is not a space within the logical URL.
+            if (!chars && col === cols - 1 && wraps && next.getCell(0)?.getWidth() === 2) continue;
+            const value = chars || ' ';
+            const position = { start: { x: col + 1, y: row + 1 }, end: { x: col + cell.getWidth(), y: row + 1 } };
+            text += value;
+            // Regex offsets are UTF-16 positions; xterm cells own display width,
+            // including surrogate pairs and combining characters in one cell.
+            for (let i = 0; i < value.length; i++) cells.push(position);
+          }
+          if (!wraps) break;
+          row++;
+        }
+        const links = findUrlLinks(text, cols, start, cells).map((l) => ({ text: l.text, range: l.range, activate(_e, t) { openUrl(t); }, hover() {}, leave() {} }));
         callback(links.length ? links : undefined);
       },
     });
@@ -678,11 +718,13 @@
     connect(s);
   }
   function setActive(id) {
+    stopSelectionScroll(); cancelKeybarTap();
+    if (!S.has(id)) id = null;
     followActiveTab = true;
     pendingWheel = 0; lastHist = 0; lastPos = 0;
     if (wheelRaf) { cancelAnimationFrame(wheelRaf); wheelRaf = null; }
     active = id;
-    try { localStorage.setItem('cd-active', id); } catch (_) {}              // restore THIS tab (not tab #1) after a refresh
+    try { if (id) localStorage.setItem('cd-active', id); else localStorage.removeItem('cd-active'); } catch (_) {}
     const s = S.get(id);
     applyRt(s);
     setTok(null); renderRail(null);
@@ -690,8 +732,12 @@
     if (s) { ensureOpen(s); s.attn = false; s.seenTurnId = s.lastTurnId; saveSeen(s.id, s.lastTurnId); }   // viewing a tab clears + acknowledges its "done" flag
     for (const o of S.values()) if (o.el) o.el.style.display = (o.id === id) ? 'block' : 'none';
     els.empty.style.display = s ? 'none' : 'flex';
+    if (!s) els.dims.textContent = '';
     if (workspace) workspace.sync();
-    if (s) requestAnimationFrame(() => { fit(s, true); if (!coarsePointer.matches && !workspace?.isEditing()) s.term.focus(); });
+    if (s) requestAnimationFrame(() => {
+      if (active !== id || S.get(id) !== s) return;
+      fit(s, true); if (!coarsePointer.matches && !workspace?.isEditing()) s.term.focus();
+    });
     paint();
     requestAnimationFrame(() => scrollPillIntoView(id));   // switching must never leave the active pill off-screen
     pollTelemetry();
@@ -731,13 +777,15 @@
       }
     }
   }
-  function destroy(id) {
+  function destroy(id, deferSelection = false) {
     const s = S.get(id); if (!s) return;
     s.userClosed = true; try { s.ws && s.ws.close(); } catch (_) {}
     try { s.term && s.term.dispose(); } catch (_) {} if (s.el) s.el.remove(); S.delete(id);
+    missingSessions.delete(id); sessionRevision++;
     window.CommandDeckAttach && window.CommandDeckAttach.dropSession(id);
     if (workspace) workspace.dropSession(id);
-    if (active === id) { active = null; const next = S.keys().next().value; if (next) setActive(next); else { applyRt(); setTok(null); renderRail(null); els.empty.style.display = 'flex'; els.dims.textContent = ''; } }
+    if (deferSelection) return;
+    if (active === id) { setActive(S.keys().next().value || null); if (!active) els.dims.textContent = ''; }
     if (workspace) workspace.sync();
     paint();
   }
@@ -795,7 +843,8 @@
   async function renameSession(s) {
     const name = await cdModal({ title: 'Rename session', message: 'New name for this session:', input: s.name, okText: 'Rename' }); if (name == null) return;
     const r = await api('POST', '/api/term/rename', { id: s.id, label: name });
-    if (r.ok) { s.name = name.trim().slice(0, 40) || s.name; paint(); }
+    if (S.get(s.id) !== s) return;
+    if (r.ok) { s.name = name.trim().slice(0, 40) || s.name; sessionRevision++; paint(); }
     else await cdModal({ title: 'Could not rename session', message: r.error || 'The server rejected the rename.', okText: 'OK', okOnly: true });
   }
   async function loadProjects() {
@@ -1345,8 +1394,11 @@
       // ANOTHER device (phone, tmux CLI) appear/vanish without a reload. Never mid-drag —
       // the repaint would rip the dragged tab out of the DOM.
       if (telTick++ % 4 === 0 && !dragged) {
+        const revision = sessionRevision;
         const list = await api('GET', '/api/term/sessions');
-        if (list.ok && Array.isArray(list.sessions)) renderSessions(list.sessions);
+        if (revision !== sessionRevision) missingSessions.clear(); // a create/close/rename superseded this request
+        else if (validSessionList(list)) { sessionsStale = false; renderSessions(list.sessions); }
+        else { sessionsStale = true; missingSessions.clear(); measureLane(); }
       }
       // SSE fresh → poll only the active tab (deep rail read) + any err-flagged ids
       // (their frames carry no tuple; the route is their only truth — spec §5 R2-F9).
@@ -1359,7 +1411,7 @@
       const got = await Promise.all(all.map(async (x) => [x, await api('GET', '/api/term/telemetry?id=' + enc(x.id) + (x.id === active ? '&full=1' : ''))]));
       let changed = false;
       for (const [x, r] of got) {
-        if (!S.has(x.id)) continue;                                        // killed while the fan-out was in flight
+        if (S.get(x.id) !== x) continue;                                   // killed or replaced while the request was in flight
         const tel = r && r.ok && r.telemetry;
         if (!tel) { if (!sseLightsFresh() && !x.lightsErr) { x.lightsErr = true; changed = true; } continue; }
         // One lights source per mode: while SSE is fresh, a poll response may only
@@ -1509,25 +1561,39 @@
   // rows that scroll into view. Tracked on `document` so a drag PAST the bottom keeps scrolling.
   function wireSelectionAutoscroll() {
     const EDGE = 30;                                    // px from an edge that arms autoscroll
-    let selecting = false, lastX = 0, lastY = 0, dir = 0, timer = null;
-    const stop = () => { if (timer) { clearInterval(timer); timer = null; } dir = 0; selecting = false; };
+    let selecting = false, sessionId = null, lastX = 0, lastY = 0, dir = 0, timer = null;
+    const stop = () => {
+      if (timer) { clearInterval(timer); timer = null; }
+      if (selecting) {
+        pendingWheel = 0;
+        if (wheelRaf) { cancelAnimationFrame(wheelRaf); wheelRaf = null; }
+      }
+      dir = 0; selecting = false; sessionId = null;
+    };
+    stopSelectionScroll = stop;
     const tick = () => {
-      if (!selecting || !active || !dir) return;
+      if (!selecting || !active || active !== sessionId || document.hidden || !els.view.classList.contains('active') || workspace.isEditing()) return stop();
+      if (!dir) return;
       pendingWheel += dir < 0 ? 2 : -2;                 // top edge → older (up/+); bottom edge → newer (down/−)
       scheduleScroll();
       const el = document.elementFromPoint(lastX, lastY);   // keep xterm's drag-extend alive after the repaint
       if (el) el.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: lastX, clientY: lastY, buttons: 1 }));
     };
     // start only on a real text drag inside the terminal — not on the scrollbar (it owns its own drag)
-    els.host.addEventListener('mousedown', (e) => { if (e.button === 0 && !(e.target.closest && e.target.closest('#cd-scroll, #cd-copypanel'))) { selecting = true; lastX = e.clientX; lastY = e.clientY; } });
+    els.host.addEventListener('mousedown', (e) => { if (e.button === 0 && active && !workspace.isEditing() && !(e.target.closest && e.target.closest('#cd-scroll, #cd-copypanel'))) { selecting = true; sessionId = active; lastX = e.clientX; lastY = e.clientY; } });
     document.addEventListener('mousemove', (e) => {
       if (!selecting) return;
+      if (!(e.buttons & 1)) return stop();
       lastX = e.clientX; lastY = e.clientY;
       const r = els.host.getBoundingClientRect();
       const nd = (e.clientY > r.bottom - EDGE) ? 1 : (e.clientY < r.top + EDGE) ? -1 : 0;
       if (nd !== dir) { dir = nd; if (timer) { clearInterval(timer); timer = null; } if (dir) timer = setInterval(tick, 55); }
     });
-    document.addEventListener('mouseup', stop);
+    addEventListener('mouseup', stop, true);
+    addEventListener('pointerup', stop, true);
+    addEventListener('pointercancel', stop, true);
+    addEventListener('blur', stop);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
   }
 
   // Middle-button autoscroll — HOLD the middle button and move up/down to scroll tmux history
@@ -1660,11 +1726,12 @@
       if (!altK && !cmdK) return;
       if (!els.view || els.view.hidden) return;                       // terminal tab only
       const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) && t !== els.swQ) return;
+      const terminalInput = t && t.classList && t.classList.contains('xterm-helper-textarea') && els.host.contains(t);
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) && t !== els.swQ && !terminalInput) return;
       if (cmdK) { const s = active && S.get(active); if (s && rtOf(s) === 'shell') return; }   // PTY keeps the chord
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation();
       swOpen ? closeSwitcher() : openSwitcher();
-    });
+    }, true); // xterm consumes keydown before it can bubble out of its textarea
   }
   function wire() {
     workspace = window.CommandDeckWorkspace.create({ getSession: () => active && S.get(active), api, refit });
@@ -1743,23 +1810,42 @@
     }, true);
     document.addEventListener('click', (e) => { if (!e.target.closest('#cd-new-pop') && !e.target.closest('#cd-new')) closePop(); });
     // Touch key bar (phone): sends the TUI control keys a soft keyboard lacks through the
-    // normal input path. pointerdown + preventDefault so xterm's hidden textarea KEEPS focus
-    // and the soft keyboard stays open; ⇞/⇟ reuse the same tmux-history plumbing as the wheel.
+    // normal input path. Commit a short, still tap on release so swiping the strip cannot
+    // type keys; suppress only compatibility mouse focus, leaving native touch panning intact.
     if (els.keybar) {
       const KEYS = { enter: '\r', esc: '\x1b', tab: '\t', stab: '\x1b[Z', up: '\x1b[A', down: '\x1b[B', left: '\x1b[D', right: '\x1b[C', cc: '\x03' };
-      els.keybar.querySelectorAll('button').forEach((b) => {
-        const press = (e) => {
-        e.preventDefault();
-        if (workspace.isEditing()) return;
+      let tap = null;
+      cancelKeybarTap = () => { tap = null; };
+      const press = b => {
+        if (workspace.isEditing() || document.hidden || !els.view.classList.contains('active') || !b.getClientRects().length) return;
         const s = active && S.get(active); if (!s) return;
-        if (b.dataset.act === 'hup') { api('POST', '/api/term/scroll', { id: active, op: 'up', n: 15 }).then(updateScroll); return; }
-        if (b.dataset.act === 'hdn') { api('POST', '/api/term/scroll', { id: active, op: (lastPos - 15 <= 0) ? 'bottom' : 'down', n: 15 }).then(updateScroll); return; }
+        if (b.dataset.act === 'hup') { api('POST', '/api/term/scroll', { id: s.id, op: 'up', n: 15 }).then(updateScroll); return; }
+        if (b.dataset.act === 'hdn') { api('POST', '/api/term/scroll', { id: s.id, op: (lastPos - 15 <= 0) ? 'bottom' : 'down', n: 15 }).then(updateScroll); return; }
         const k = KEYS[b.dataset.k];
-        if (k) sendData(s, k);   // same buffer-aware path as typed keys (the esc button raced the socket too)
-        };
-        b.addEventListener('pointerdown', press);
-        b.addEventListener('click', e => { if (e.detail === 0) press(e); });
+        if (k) sendData(s, k);
+      };
+      els.keybar.querySelectorAll('button').forEach(b => {
+        b.addEventListener('pointerdown', e => {
+          if (!e.isPrimary || e.button !== 0) return cancelKeybarTap();
+          tap = { pointer: e.pointerId, button: b, session: active, x: e.clientX, y: e.clientY, at: Date.now() };
+        });
+        b.addEventListener('mousedown', e => e.preventDefault());
+        b.addEventListener('click', e => { if (e.detail === 0) { e.preventDefault(); press(b); } });
       });
+      addEventListener('pointermove', e => {
+        if (tap && e.pointerId === tap.pointer && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > 10) cancelKeybarTap();
+      }, { passive: true });
+      addEventListener('pointerup', e => {
+        if (!tap || e.pointerId !== tap.pointer) return;
+        const current = tap; cancelKeybarTap();
+        if (active !== current.session || Date.now() - current.at > 600 || Math.hypot(e.clientX - current.x, e.clientY - current.y) > 10) return;
+        if (!current.button.contains(document.elementFromPoint(e.clientX, e.clientY))) return;
+        e.preventDefault(); press(current.button);
+      });
+      addEventListener('pointercancel', cancelKeybarTap);
+      addEventListener('blur', cancelKeybarTap);
+      els.keybar.addEventListener('scroll', cancelKeybarTap, { passive: true });
+      document.addEventListener('visibilitychange', () => { if (document.hidden) cancelKeybarTap(); });
     }
     wireImageAttach();   // 📎 button + Ctrl+V paste of screenshots → upload → @-path into Claude
     wireNotes();         // rail Telemetry ⇄ Notes toggle + the autosaving shared scratchpad
@@ -1786,8 +1872,10 @@
   // returned @path into the PTY so Claude Code reads the picture (never a fake [Image #N]).
   function wireImageAttach() {
     if (els.imgBtn && els.fileInput) {
-      els.imgBtn.onclick = () => { if (!active) return flashImg('open a session first'); els.fileInput.click(); };
-      els.fileInput.onchange = () => { attachFiles(els.fileInput.files); els.fileInput.value = ''; };
+      let pickerSession = null;
+      els.imgBtn.onclick = () => { if (!active) return flashImg('open a session first'); pickerSession = active; els.fileInput.click(); };
+      els.fileInput.onchange = () => { attachFiles(els.fileInput.files, pickerSession || active); pickerSession = null; els.fileInput.value = ''; };
+      els.fileInput.addEventListener('cancel', () => { pickerSession = null; });
     }
     // Ctrl+V / right-click paste of a screenshot — capture phase so we see the image BEFORE xterm's
     // textarea. A plain-text paste has no image item, so we don't touch it (falls through to xterm).
@@ -1799,19 +1887,21 @@
       if (imgs.length) { e.preventDefault(); e.stopPropagation(); attachFiles(imgs); }
     }, true);
   }
-  function attachFiles(fileList) {
-    if (!active) return flashImg('open a session first');
+  function attachFiles(fileList, id = active) {
+    const session = S.get(id);
+    if (!session) return flashImg('open a session first');
     const imgs = [].slice.call(fileList).filter((f) => /^image\//.test(f.type));
     if (!imgs.length) return;
-    for (const f of imgs) { const fr = new FileReader(); fr.onload = () => uploadImage(f.name || 'image.png', fr.result); fr.readAsDataURL(f); }
+    for (const f of imgs) { const fr = new FileReader(); fr.onload = () => uploadImage(f.name || 'image.png', fr.result, session); fr.readAsDataURL(f); }
   }
-  async function uploadImage(name, dataUrl) {
-    const id = active; if (!id) return;
+  async function uploadImage(name, dataUrl, session) {
+    const id = session.id; if (S.get(id) !== session) return;
     // Spaces/colons in screenshot names ("Screenshot 2026-06-29 22-27.png") break Claude's @-mention
     // parsing (it stops at the first space), so collapse to a single safe token before upload.
     const safe = String(name || 'image.png').replace(/[^\w.\-]+/g, '_');
     flashImg('uploading…');
     const r = await api('POST', '/api/term/upload', { id, name: safe, data: dataUrl });
+    if (S.get(id) !== session) return;
     if (r && r.ok && r.rel) { injectTextFor(id, '@' + r.rel + ' '); flashImg('📎 ' + r.rel); }
     else flashImg('upload failed' + (r && r.error ? ': ' + r.error : ''));
   }

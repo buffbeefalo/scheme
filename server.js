@@ -19,6 +19,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { isUtf8 } = require('node:buffer');
 const { execFile, execFileSync, spawn } = require('child_process');
 
 const metrics = require('./lib/metrics');
@@ -402,7 +403,7 @@ async function tick() {
       if (!_lightsTimed) { _lightsTimed = true; console.log(`[scheme] lights walk: ${Date.now() - t0}ms over ${sessions.length} sessions`); }
       next.termLights = termLights;
       next.termAttention = attention;
-    } catch { next.termAttention = {}; }   // no termLights field = "walk failed", clients fall back to polling
+    } catch { /* Missing attention/lights fields preserve the last known state during a failed walk. */ }
     lastPayload = next;
     broadcast(lastPayload);
   } catch (e) {
@@ -513,7 +514,7 @@ const server = http.createServer(async (req, res) => {
     } else if (route === '/api/audit') {
       let limit = 200;
       try { limit = Math.min(1000, Math.max(1, parseInt(new URL(req.url, 'http://x').searchParams.get('limit') || '200', 10) || 200)); } catch {}
-      return sendJson(res, 200, { ok: true, ts: Date.now(), entries: audit.readRecent(limit) });
+      return sendJson(res, 200, { ok: true, ts: Date.now(), entries: await audit.readRecentAsync(limit) });
     } else if (req.method === 'POST' && route === '/api/openurl') {
       const g = await guardedControlBody(req, res, 'openurl'); if (!g.ok) return;
       let url = ''; try { url = new URLSearchParams(g.payload.raw).get('url') || ''; } catch {}
@@ -607,7 +608,7 @@ const server = http.createServer(async (req, res) => {
         const g = await guardedControlBody(req, res, 'termBody'); if (!g.ok) return;
         const id = String(g.payload.id || '');
         const r = await terminal.respond(id, g.payload.text);
-        audit.appendEntry({ actor: auditActor(req), action: 'term:respond', target: id, detail: terminal.sanitizeResponse(g.payload.text).slice(0, 80), ok: r.ok });
+        audit.appendEntry({ actor: auditActor(req), action: 'term:respond', target: id, detail: 'response submitted', ok: r.ok });
         return sendJson(res, r.ok ? 200 : 400, { ok: r.ok, error: r.ok ? undefined : (r.error || 'respond failed') });
       }
       if (route === '/api/term/notes') {
@@ -648,11 +649,14 @@ const server = http.createServer(async (req, res) => {
         if (route === '/api/term/find') return sendJson(res, 200, { ok: true, matches: fsjail.findFiles(sess.cwd, q.get('q') || '') });
         // git: FIXED argv, cwd-jailed, diff path validated through fsjail. Read-only.
         const cwd = sess.cwd, op = q.get('op') || 'status', rel = q.get('path') || '';
-        const isRepo = fs.existsSync(path.join(cwd, '.git'));
+        const isRepo = (await run('git', ['-C', cwd, 'rev-parse', '--is-inside-work-tree'])).trim() === 'true';
         if (op === 'status') {
           if (!isRepo) return sendJson(res, 200, { ok: true, repo: false, files: [] });
-          const out = await run('git', ['-C', cwd, 'status', '--porcelain=v1', '-z', '--no-renames', '-uall'], 4000);
-          return sendJson(res, 200, { ok: true, repo: true, files: parseGitStatus(out) });
+          const prefix = (await run('git', ['-C', cwd, 'rev-parse', '--show-prefix'])).replace(/\n$/, '');
+          const out = await run('git', ['--no-optional-locks', '-C', cwd, 'status', '--porcelain=v1', '-z', '--no-renames', '-uall', '--', '.'], 4000);
+          const files = parseGitStatus(out).filter((f) => f.path.startsWith(prefix))
+            .map((f) => ({ ...f, path: f.path.slice(prefix.length) }));
+          return sendJson(res, 200, { ok: true, repo: true, files });
         }
         if (op === 'diff') {
           if (!isRepo) return sendJson(res, 400, { ok: false, error: 'not a git repo' });
@@ -677,6 +681,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(404); res.end('not found');
     }
   } catch (e) {
+    if (!res.headersSent && e && e.code === 'TMUX_LIST_FAILED') return sendJson(res, 503, { ok: false, error: e.message });
     console.error('[scheme] route error:', req.method, req.url, e && e.stack || e);
     if (!res.headersSent) sendJson(res, 500, { ok: false, error: 'internal error' }); else { try { res.destroy(); } catch {} }
   }
@@ -686,7 +691,7 @@ const server = http.createServer(async (req, res) => {
 // Hand-rolled WS (lib/wsframe) bridging the browser to a PTY-backed `tmux attach`. util-linux
 // `script` supplies the PTY on Linux, BSD `script` on macOS — no native node module. Closing the
 // socket only DETACHES; the session keeps running in tmux and a reload re-attaches.
-server.on('upgrade', (req, socket) => {
+server.on('upgrade', (req, socket, head) => {
   if (req.url.split('?')[0] !== '/api/term/attach') return socket.destroy();
   if (!isLoopback(req)) return socket.destroy();
   if (terminalExposedByFunnel()) return socket.destroy();
@@ -697,47 +702,127 @@ server.on('upgrade', (req, socket) => {
   if (!terminal.isSafeId(id) || !key) return socket.destroy();
   terminal.tuneSocket(socket);
   socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n' + `Sec-WebSocket-Accept: ${acceptKey(key)}\r\n\r\n`);
-  bridgeSession(socket, id);
+  bridgeSession(socket, id, head);
 });
 function ptyArgs(cmd) {
   // util-linux: script -q -f -c "<cmd>" /dev/null ; BSD (macOS): script -q /dev/null <cmd...>
   return process.platform === 'darwin' ? ['-q', '/dev/null', 'sh', '-c', cmd] : ['-q', '-f', '-c', cmd, '/dev/null'];
 }
-function bridgeSession(socket, id) {
+function bridgeSession(socket, id, head = Buffer.alloc(0)) {
   const cmd = [terminal.TMUX_BIN, ...terminal.tmuxArgs(terminal.tmuxAttachArgs(id))].map(terminal.shquote).join(' ');
   const child = spawn('script', ptyArgs(cmd), { env: { ...process.env, TERM: 'xterm-256color' } });
   const attachment = terminal.createAttachmentResizer(id, child);
-  let alive = true;
-  const closeAll = () => {
-    if (!alive) return; alive = false;
+  let alive = true, inputPaused = false, outputPaused = false;
+  let inputTimer = null, outputTimer = null;
+  let buf = Buffer.alloc(0), fragments = [], fragmentBytes = 0, fragmentOpcode = null;
+  const closeAll = (reason = 1000) => {
+    if (!alive) return;
+    alive = false;
+    clearTimeout(inputTimer); clearTimeout(outputTimer);
+    child.stdin.removeListener('drain', inputDrain);
+    socket.removeListener('drain', outputDrain);
+    buf = Buffer.alloc(0); fragments = []; fragmentBytes = 0;
     attachment.close();
+    const code = Buffer.alloc(2); code.writeUInt16BE(Number.isInteger(reason) ? reason : 1011);
+    if (!socket.destroyed) {
+      const deadline = setTimeout(() => socket.destroy(), 1000);
+      deadline.unref?.();
+      socket.once('close', () => clearTimeout(deadline));
+    }
+    try { if (!socket.destroyed && !socket.writableEnded) socket.write(encodeFrame(OPCODES.CLOSE, code)); } catch {}
     try { child.stdin.end(); } catch {}
     try { child.kill('SIGTERM'); } catch {}
     try { socket.end(); } catch {}
   };
-  const toClient = (source, b) => writeWithBackpressure(source, socket, encodeFrame(OPCODES.BINARY, b), { maxBytes: MAX_WS_BUFFER, onOverflow: closeAll });
-  child.stdout.on('data', (b) => toClient(child.stdout, b));
-  child.stderr.on('data', (b) => toClient(child.stderr, b));
-  child.on('exit', () => { try { socket.write(encodeFrame(OPCODES.CLOSE, Buffer.alloc(0))); } catch {} closeAll(); });
-  child.on('error', closeAll);
-  let buf = Buffer.alloc(0);
-  socket.on('data', (chunk) => {
-    if (buf.length + chunk.length > MAX_WS_INBOUND) return closeAll();
-    buf = Buffer.concat([buf, chunk]);
-    let f;
-    while ((f = decodeFrame(buf))) {
-      buf = buf.subarray(f.bytesConsumed);
-      if (f.opcode === OPCODES.CLOSE) return closeAll();
-      if (f.opcode === OPCODES.PING) { try { socket.write(encodeFrame(OPCODES.PONG, f.payload)); } catch {} continue; }
-      if (![OPCODES.TEXT, OPCODES.BINARY, OPCODES.CONT].includes(f.opcode)) continue;
-      let m = null; try { m = JSON.parse(f.payload.toString('utf8')); } catch { continue; }
-      if (m && m.t === 'd' && typeof m.d === 'string') { try { child.stdin.write(m.d); } catch {} }
-      else if (m && m.t === 'r') attachment.resize(m.c, m.r).catch(closeAll);
+  const stalled = () => {
+    const timer = setTimeout(() => closeAll(1013), 30000);
+    timer.unref?.();
+    return timer;
+  };
+  function outputDrain() {
+    if (!alive) return;
+    clearTimeout(outputTimer); outputTimer = null; outputPaused = false;
+    child.stdout.resume(); child.stderr.resume();
+  }
+  function toClient(opcode, payload) {
+    if (!alive) return;
+    const result = boundedWrite(socket, encodeFrame(opcode, payload), MAX_WS_BUFFER);
+    if (!result.ok) return closeAll(1013);
+    if (!result.accepted && !outputPaused) {
+      outputPaused = true;
+      child.stdout.pause(); child.stderr.pause();
+      socket.once('drain', outputDrain); outputTimer = stalled();
     }
-  });
-  socket.on('end', closeAll);
-  socket.on('close', closeAll);
+  }
+  function inputDrain() {
+    if (!alive) return;
+    clearTimeout(inputTimer); inputTimer = null; inputPaused = false;
+    consume();
+    if (alive && !inputPaused) socket.resume();
+  }
+  const pendingBytes = () => buf.length + fragmentBytes + Number(child.stdin.writableLength || 0);
+  function message(payload) {
+    if (!isUtf8(payload)) return closeAll(1007);
+    let m; try { m = JSON.parse(payload.toString('utf8')); } catch { return; }
+    if (m && m.t === 'd' && typeof m.d === 'string') {
+      if (pendingBytes() + Buffer.byteLength(m.d) > MAX_WS_INBOUND) return closeAll(1009);
+      const result = boundedWrite(child.stdin, m.d, MAX_WS_INBOUND);
+      if (!result.ok) return closeAll(1013);
+      // A false write already accepted the bytes. Stop decoding, retain later frames,
+      // and continue exactly once on drain instead of queueing or resending input.
+      if (!result.accepted) {
+        inputPaused = true; socket.pause();
+        child.stdin.once('drain', inputDrain); inputTimer = stalled();
+      }
+    } else if (m && m.t === 'r') attachment.resize(m.c, m.r).catch(closeAll);
+  }
+  function consume() {
+    while (alive && !inputPaused) {
+      let f;
+      try { f = decodeFrame(buf); } catch { return closeAll(1002); }
+      if (!f) return;
+      buf = buf.subarray(f.bytesConsumed);
+      if (!f.masked || f.rsv || !Object.values(OPCODES).includes(f.opcode)) return closeAll(1002);
+      if (f.opcode >= OPCODES.CLOSE) {
+        if (!f.fin || f.payload.length > 125) return closeAll(1002);
+        if (f.opcode === OPCODES.CLOSE) {
+          if (f.payload.length === 1) return closeAll(1002);
+          if (f.payload.length > 2 && !isUtf8(f.payload.subarray(2))) return closeAll(1007);
+          return closeAll();
+        }
+        if (f.opcode === OPCODES.PING) toClient(OPCODES.PONG, f.payload);
+        continue;
+      }
+      if (f.opcode === OPCODES.CONT) {
+        if (fragmentOpcode == null) return closeAll(1002);
+      } else {
+        if (fragmentOpcode != null) return closeAll(1002);
+        if (f.fin) { message(f.payload); continue; }
+        fragmentOpcode = f.opcode;
+      }
+      fragmentBytes += f.payload.length; fragments.push(f.payload);
+      if (pendingBytes() > MAX_WS_INBOUND || fragments.length > 4096) return closeAll(1009);
+      if (f.fin) {
+        const payload = Buffer.concat(fragments, fragmentBytes);
+        fragments = []; fragmentBytes = 0; fragmentOpcode = null;
+        message(payload);
+      }
+    }
+  }
+  function receive(chunk) {
+    if (!alive) return;
+    if (pendingBytes() + chunk.length > MAX_WS_INBOUND) return closeAll(1009);
+    buf = Buffer.concat([buf, chunk]); consume();
+  }
+  child.stdout.on('data', b => toClient(OPCODES.BINARY, b));
+  child.stderr.on('data', b => toClient(OPCODES.BINARY, b));
+  for (const source of [child, child.stdin, child.stdout, child.stderr]) source.on('error', closeAll);
+  child.on('exit', () => closeAll());
+  socket.on('data', receive);
+  socket.on('end', () => closeAll());
+  socket.on('close', () => closeAll());
   socket.on('error', closeAll);
+  if (head.length) receive(head);
 }
 
 process.on('unhandledRejection', (e) => { console.error('[scheme] unhandledRejection:', e && e.stack || e); });

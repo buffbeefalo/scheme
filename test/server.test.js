@@ -118,7 +118,7 @@ async function createShell(port, cwd) {
   return result.session;
 }
 
-function terminalRoundTrip(port, id) {
+function terminalRoundTrip(port, id, fragmented = false) {
   return new Promise((resolve, reject) => {
     let socket, buf = Buffer.alloc(0), output = '', sent = false, settled = false;
     const req = http.request({ host: '127.0.0.1', port, path: `/api/term/attach?id=${encodeURIComponent(id)}`, headers: {
@@ -151,7 +151,12 @@ function terminalRoundTrip(port, id) {
             assert.ok(payload.length < 126);
             const mask = randomBytes(4);
             const masked = Buffer.from(payload.map((byte, i) => byte ^ mask[i % 4]));
-            socket.write(Buffer.concat([Buffer.from([0x81, 0x80 | payload.length]), mask, masked]));
+            if (fragmented) socket.write(Buffer.concat([
+              clientFrame(OPCODES.TEXT, payload.subarray(0, 17), false),
+              clientFrame(OPCODES.PING, Buffer.from('ping')),
+              clientFrame(OPCODES.CONT, payload.subarray(17)),
+            ]));
+            else socket.write(Buffer.concat([Buffer.from([0x81, 0x80 | payload.length]), mask, masked]));
           }
         }
       };
@@ -188,6 +193,13 @@ test('history reader enforces requested limits and rejects invalid limits', { sk
   } finally { await stopServer(child); await cleanup(s); }
 });
 
+function clientFrame(opcode, payload, fin = true) {
+  const b = encodeFrame(opcode, payload), header = b.length - Buffer.byteLength(payload);
+  b[0] = (fin ? 128 : 0) | opcode; b[1] |= 128;
+  const key = randomBytes(4), bytes = Buffer.from(b.subarray(header));
+  for (let i = 0; i < bytes.length; i++) bytes[i] ^= key[i % 4];
+  return Buffer.concat([b.subarray(0, header), key, bytes]);
+}
 function attachViewer(port, id) {
   return new Promise((resolve, reject) => {
     const req = http.request({ host: '127.0.0.1', port, path: `/api/term/attach?id=${id}`, headers: {
@@ -198,7 +210,7 @@ function attachViewer(port, id) {
     req.on('response', res => { res.resume(); reject(new Error(`upgrade refused: ${res.statusCode}`)); });
     req.on('upgrade', (_res, socket) => {
       socket.on('data', () => {}); socket.on('error', () => {});
-      resolve({ socket, resize: (cols, rows) => socket.write(encodeFrame(OPCODES.TEXT,
+      resolve({ socket, resize: (cols, rows) => socket.write(clientFrame(OPCODES.TEXT,
         Buffer.from(JSON.stringify({ t: 'r', c: cols, r: rows })))) });
     });
     req.end();
@@ -438,4 +450,58 @@ test('open-URL relay: a queued link rides the feed until acknowledged', async ()
     const ack = await request(port, 'POST', '/api/openurl/ack', { body: { id: 'nope' }, headers: sameOrigin(port) });
     assert.equal(ack.status, 200);
   } finally { await stopServer(child); await cleanup(s); }
+});
+
+
+test('Git tools find a parent repository and keep status paths inside the session folder', {skip:!hasTmux || !hasGit}, async () => {
+  const s=scratch(); const repo=path.join(s.home,'project'); const cwd=path.join(repo,'nested folder');
+  fs.mkdirSync(cwd,{recursive:true});
+  const git=(...args)=>{const r=spawnSync('git',['-C',repo,...args],{encoding:'utf8',env:{...process.env,HOME:s.home,GIT_CONFIG_NOSYSTEM:'1'}}); assert.equal(r.status,0,r.stderr);};
+  git('init','-q');
+  fs.writeFileSync(path.join(cwd,'inside.txt'),'first\n'); fs.writeFileSync(path.join(repo,'outside.txt'),'first\n');
+  git('add','.'); git('-c','user.name=Test User','-c','user.email=test@example.invalid','-c','core.hooksPath=/dev/null','commit','-qm','fixture');
+  fs.appendFileSync(path.join(cwd,'inside.txt'),'second\n'); fs.appendFileSync(path.join(repo,'outside.txt'),'private outside\n');
+  const {child,port}=await startServer(s,{SYSMON_MEM_FLOOR_MB:'0'});
+  try {
+    const session=await createShell(port,cwd);
+    const response=await request(port,'GET',`/api/term/git?id=${session.id}&op=status`);
+    const result=JSON.parse(response.body);
+    assert.equal(result.repo,true); assert.deepEqual(result.files.map(f=>f.path),['inside.txt']);
+    const diff=JSON.parse((await request(port,'GET',`/api/term/git?id=${session.id}&op=diff&path=inside.txt`)).body);
+    assert.equal(diff.ok,true); assert.match(diff.diff,/second/);
+    const escape=await request(port,'GET',`/api/term/git?id=${session.id}&op=diff&path=../outside.txt`);
+    assert.equal(escape.status,400);
+  } finally {await stopServer(child);await cleanup(s);}
+});
+
+test('a failed native session query is an HTTP error and recovery keeps the existing terminal', {skip:!hasTmux}, async () => {
+  const s=scratch(), fault=path.join(s.home,'listing-fault'), preload=path.join(s.home,'fault.cjs');
+  fs.writeFileSync(preload,`const cp=require('node:child_process'),fs=require('node:fs'),original=cp.execFile;
+cp.execFile=function(bin,args,opts,done){if(args.includes('list-sessions')&&fs.existsSync(${JSON.stringify(fault)})){setImmediate(()=>done(Object.assign(new Error('fixture timeout'),{code:'ETIMEDOUT'}),'',''));return;}return original.apply(this,arguments);};`);
+  const {child,port}=await startServer(s,{SYSMON_MEM_FLOOR_MB:'0',COMMAND_DECK_SESSIONS_TTL_MS:'0',NODE_OPTIONS:`--require=${preload}`});
+  try {
+    const session=await createShell(port,s.home);
+    fs.writeFileSync(fault,'1');
+    const bad=await request(port,'GET','/api/term/sessions');
+    assert.equal(bad.status,503);assert.equal(JSON.parse(bad.body).ok,false);
+    fs.unlinkSync(fault);
+    const good=JSON.parse((await request(port,'GET','/api/term/sessions')).body);
+    assert.equal(good.ok,true);assert.ok(good.sessions.some(row=>row.id===session.id));
+    assert.equal(child.exitCode,null);
+  } finally {await stopServer(child);await cleanup(s);}
+});
+
+
+test('fragmented input reaches native tmux and closing a connected tab leaves the server healthy', {skip:!hasTmux || !hasScript}, async () => {
+  const s=scratch();const {child,port}=await startServer(s,{SYSMON_MEM_FLOOR_MB:'0'});
+  let viewer;
+  try {
+    const session=await createShell(port,s.home);
+    assert.match(await terminalRoundTrip(port,session.id,true),/scheme-attached-ok/);
+    viewer=await attachViewer(port,session.id);
+    const killed=await request(port,'POST','/api/term/kill',{body:{id:session.id},headers:sameOrigin(port)});
+    assert.equal(JSON.parse(killed.body).ok,true);
+    assert.equal((await request(port,'GET','/api/term/sessions')).status,200);
+    assert.equal(child.exitCode,null);
+  } finally {viewer?.socket.destroy();await stopServer(child);await cleanup(s);}
 });

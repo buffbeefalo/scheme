@@ -56,6 +56,10 @@ Model, context, or account meters may be missing if the installed tool version d
 
 ## Tabs are missing or their details look wrong
 
+A temporary session-list error should leave open tabs and unfinished drafts in place and show **retrying**. A tab disappears after two successful observations confirm it is missing, or after a successful explicit close. A failed close or save is reported instead of being treated as a successful permanent removal.
+
+When a Codex conversation file has not appeared yet, a missing lookup is retried within 30 seconds. The terminal remains usable during that wait.
+
 Check `locale charmap` in the terminal that starts Scheme. It should print **UTF-8**. With tmux 3.4, a server started under a non-UTF-8 locale can turn tab separators in session metadata into underscores, preventing Scheme from recognizing the fields correctly.
 
 On Ubuntu/Debian, use `export LANG=C.UTF-8` and `export LC_ALL=C.UTF-8` before launching Scheme. Other systems may use a different installed UTF-8 locale; `locale -a` lists the choices. A service also needs a UTF-8 locale in its own environment; the Scheme installer does not currently persist locale overrides.
@@ -85,6 +89,8 @@ The saved PATH may point at a moved Node or agent installation. Open the termina
 On Linux, inspect `systemctl --user status scheme` and `journalctl --user -u scheme -n 50`. Confirm no foreground server already owns the same port. Systemd must be available for the Linux service. WSL also needs a running distribution; installing the service alone does not start it from Windows.
 
 ## Phone keyboard or scrolling problems
+
+The phone key strip sends a key on a short tap's release. Swiping, cancelling a touch, or holding it does not send the key. Image attachment remains assigned to the tab where the attachment began, even if you switch tabs before the upload finishes.
 
 Use an up-to-date browser. Tap inside the terminal to bring back the keyboard. Try landscape orientation for more room, close and reopen the keyboard, or reload the page after reconnecting. These problems can be browser or device specific; the page's resize handling is not a guarantee for every mobile keyboard.
 

@@ -92,6 +92,193 @@ test('corrupt file → [] (never throws)', () => {
   assert.deepStrictEqual(reg.readAll(), []);
 });
 
+test('upsert refuses to replace corrupt or invalid registry data', async (t) => {
+  for (const before of ['{ not json', '{"version":1,"sessions":{}}']) {
+    await t.test(before, () => {
+      fs.writeFileSync(TMP, before);
+      const result = reg.upsert({ id: 'cd-new', label: 'new' });
+      assert.deepStrictEqual({ result, saved: fs.readFileSync(TMP, 'utf8') }, {
+        result: false,
+        saved: before,
+      });
+    });
+  }
+});
+
+test('registry mutations preserve data and report failure after a read error', async (t) => {
+  const operations = {
+    writeAll: () => reg.writeAll([{ id: 'cd-new', label: 'new' }]),
+    upsert: () => reg.upsert({ id: 'cd-new', label: 'new' }),
+    setLabel: () => reg.setLabel('cd-kept', 'renamed'),
+    remove: () => reg.remove('cd-kept'),
+    reorder: () => reg.reorder(['cd-kept']),
+  };
+  for (const code of ['EACCES', 'EMFILE', 'EIO']) {
+    for (const [name, mutate] of Object.entries(operations)) {
+      await t.test(`${name} after ${code}`, (t) => {
+        seed([{ id: 'cd-kept', label: 'keep me' }]);
+        const before = fs.readFileSync(TMP, 'utf8');
+        const readFile = fs.readFileSync;
+        const read = t.mock.method(fs, 'readFileSync', (file, ...args) => {
+          if (file === TMP) throw Object.assign(new Error(`simulated ${code}`), { code });
+          return readFile(file, ...args);
+        });
+        let result;
+        try { result = mutate(); }
+        finally { read.mock.restore(); }
+        assert.deepStrictEqual({ result, saved: fs.readFileSync(TMP, 'utf8') }, {
+          result: false,
+          saved: before,
+        });
+      });
+    }
+  }
+});
+
+test('a successful registry save flushes its data before replacement and its directory after', (t) => {
+  seed([{ id: 'cd-kept', label: 'before' }]);
+  const operations = [];
+  const key = (stat) => `${stat.dev}:${stat.ino}`;
+  const flush = fs.fsyncSync;
+  const rename = fs.renameSync;
+  t.mock.method(fs, 'fsyncSync', (fd) => {
+    operations.push({ type: 'flush', key: key(fs.fstatSync(fd)) });
+    return flush(fd);
+  });
+  t.mock.method(fs, 'renameSync', (source, destination) => {
+    if (destination === TMP) operations.push({ type: 'replace', key: key(fs.statSync(source)) });
+    return rename(source, destination);
+  });
+
+  assert.strictEqual(reg.setLabel('cd-kept', 'saved'), true);
+  const fileKey = key(fs.statSync(TMP));
+  const directoryKey = key(fs.statSync(path.dirname(TMP)));
+  const relevant = operations.filter((operation) => operation.key === fileKey || operation.key === directoryKey)
+    .map((operation) => operation.type === 'replace' ? 'replace'
+      : operation.key === directoryKey ? 'flush directory' : 'flush data');
+  assert.deepStrictEqual(relevant, ['flush data', 'replace', 'flush directory']);
+  assert.strictEqual(reg.readAll()[0].label, 'saved');
+});
+
+test('a failed data flush does not replace the previous registry', (t) => {
+  seed([{ id: 'cd-kept', label: 'before' }]);
+  const before = fs.readFileSync(TMP, 'utf8');
+  const opened = new Map();
+  const open = fs.openSync;
+  const flush = fs.fsyncSync;
+  t.mock.method(fs, 'openSync', (file, ...args) => {
+    const fd = open(file, ...args);
+    opened.set(fd, String(file));
+    return fd;
+  });
+  t.mock.method(fs, 'fsyncSync', (fd) => {
+    if (opened.get(fd)?.startsWith(`${TMP}.`) && opened.get(fd).endsWith('.tmp')) {
+      throw Object.assign(new Error('simulated registry flush failure'), { code: 'EIO' });
+    }
+    return flush(fd);
+  });
+
+  const result = reg.setLabel('cd-kept', 'must not be committed');
+  assert.deepStrictEqual({ result, saved: fs.readFileSync(TMP, 'utf8') }, {
+    result: false,
+    saved: before,
+  });
+});
+
+test('ownership lost before registry replacement preserves saved data and the new owner', (t) => {
+  seed([{ id: 'cd-kept', label: 'before' }]);
+  const before = fs.readFileSync(TMP, 'utf8');
+  const flush = fs.fsyncSync;
+  const open = fs.openSync;
+  const opened = new Map();
+  t.after(() => fs.rmSync(`${TMP}.lock`, { force: true }));
+  t.mock.method(fs, 'openSync', (file, ...args) => {
+    const fd = open(file, ...args);
+    opened.set(fd, String(file));
+    return fd;
+  });
+  t.mock.method(fs, 'fsyncSync', (fd) => {
+    flush(fd);
+    if (opened.get(fd)?.startsWith(`${TMP}.`) && opened.get(fd).endsWith('.tmp')) {
+      const owner = JSON.parse(fs.readFileSync(`${TMP}.lock`, 'utf8'));
+      fs.writeFileSync(`${TMP}.lock`, JSON.stringify({ ...owner, token: 'replacement' }));
+    }
+  });
+  assert.strictEqual(reg.setLabel('cd-kept', 'must not replace'), false);
+  assert.strictEqual(fs.readFileSync(TMP, 'utf8'), before);
+  assert.strictEqual(JSON.parse(fs.readFileSync(`${TMP}.lock`, 'utf8')).token, 'replacement');
+});
+
+test('registry snapshots distinguish absence from a damaged existing file', () => {
+  reset();
+  assert.deepStrictEqual(reg.readSnapshot(), { ok: true, missing: true, sessions: [] });
+  fs.writeFileSync(TMP, '{ damaged');
+  const snapshot = reg.readSnapshot();
+  assert.strictEqual(snapshot.ok, false);
+  assert.strictEqual(snapshot.missing, false);
+  assert.strictEqual(snapshot.sessions, null);
+  assert.ok(snapshot.error instanceof Error);
+  assert.strictEqual(reg.writeAll([]), false);
+  assert.strictEqual(fs.readFileSync(TMP, 'utf8'), '{ damaged');
+});
+
+test('registry replacements are private files', () => {
+  reset();
+  assert.strictEqual(reg.upsert({ id: 'cd-private' }), true);
+  assert.strictEqual(fs.statSync(TMP).mode & 0o777, 0o600);
+});
+
+test('invalid supplied entries cannot make a healthy registry unreadable', () => {
+  seed([{ id: 'cd-kept', label: 'before' }]);
+  const before = fs.readFileSync(TMP, 'utf8');
+  const array = [];
+  array.id = 'cd-array';
+  assert.strictEqual(reg.upsert({ id: 42 }), false);
+  assert.strictEqual(reg.writeAll([array]), false);
+  assert.strictEqual(fs.readFileSync(TMP, 'utf8'), before);
+  assert.strictEqual(reg.readSnapshot().ok, true);
+});
+
+test('exclusive registry temporary-file collision preserves both existing files', (t) => {
+  seed([{ id: 'cd-kept', label: 'before' }]);
+  const before = fs.readFileSync(TMP, 'utf8');
+  const open = fs.openSync;
+  let collision;
+  t.after(() => { if (collision) fs.rmSync(collision, { force: true }); });
+  t.mock.method(fs, 'openSync', (file, ...args) => {
+    if (typeof file === 'string' && file.startsWith(`${TMP}.`) && file.endsWith('.tmp')) {
+      collision = file;
+      const fd = open(file, 'wx', 0o600);
+      fs.writeFileSync(fd, 'another writer owns these bytes');
+      fs.closeSync(fd);
+    }
+    return open(file, ...args);
+  });
+  assert.strictEqual(reg.setLabel('cd-kept', 'must not replace'), false);
+  assert.strictEqual(fs.readFileSync(TMP, 'utf8'), before);
+  assert.strictEqual(fs.readFileSync(collision, 'utf8'), 'another writer owns these bytes');
+});
+
+test('directory flush ignores unsupported operations but reports other failures', async (t) => {
+  for (const code of ['EINVAL', 'ENOTSUP', 'EIO']) {
+    await t.test(code, (t) => {
+      seed([{ id: 'cd-kept', label: 'before' }]);
+      const flush = fs.fsyncSync;
+      let attempted = false;
+      t.mock.method(fs, 'fsyncSync', (fd) => {
+        if (fs.fstatSync(fd).isDirectory()) {
+          attempted = true;
+          throw Object.assign(new Error(`simulated directory ${code}`), { code });
+        }
+        return flush(fd);
+      });
+      assert.strictEqual(reg.setLabel('cd-kept', 'saved'), code !== 'EIO');
+      assert.strictEqual(attempted, true);
+      assert.strictEqual(reg.readAll()[0].label, 'saved');
+    });
+  }
+});
+
 test('disk round-trip: versioned envelope, id persisted', () => {
   reset();
   reg.upsert({ id: 'cd9', label: 'persist', cwd: '/z', uuid: 'u9' });

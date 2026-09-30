@@ -46,6 +46,26 @@ test('rejection: never cached, error propagates, next get re-calls', async () =>
   assert.deepEqual(await c.get(), { ok: true, n: 2 });
 });
 
+test('a synchronous loader throw preserves the original error', async () => {
+  const failure = new Error('synchronous loader failure');
+  const c = createTtlCache(() => { throw failure; });
+
+  await assert.rejects(c.get(), (error) => error === failure);
+});
+
+test('a synchronous loader throw does not poison the next call', async () => {
+  let calls = 0;
+  const c = createTtlCache(() => {
+    if (++calls === 1) throw new Error('first call fails before returning a promise');
+    return { ok: true, n: calls };
+  }, { ttlMs: 1000, now: () => 0 });
+
+  await assert.rejects(c.get());
+  assert.deepEqual(await c.get(), { ok: true, n: 2 });
+  assert.deepEqual(await c.get(), { ok: true, n: 2 }, 'the recovered value is cached normally');
+  assert.equal(calls, 2);
+});
+
 test('invalidate: cached value dropped', async () => {
   let calls = 0;
   const c = createTtlCache(async () => ({ ok: true, n: ++calls }), { ttlMs: 1000, now: () => 0 });
